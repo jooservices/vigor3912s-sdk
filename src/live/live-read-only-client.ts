@@ -1,7 +1,7 @@
 /**
  * `LiveReadOnlyClient` + pre-connect guard chain (Wave 3 E3,
  * `ARCHITECTURE.md` "Item 4 — transport/session policy and
- * `LiveReadOnlyClient`"; `HANDOVER.md`'s non-negotiable safety boundary).
+ * `LiveReadOnlyClient`"; project safety boundary).
  *
  * **Explicit stop, same as the architecture and backlog entry for this
  * task**: this module ends at guard chain + derived read-only surface +

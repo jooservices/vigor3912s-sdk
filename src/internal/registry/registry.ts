@@ -19,7 +19,7 @@
  * self-assembling `internal/registry/registry.generated.ts` aggregator and
  * the generator-tool extension described in `BACKLOG.md`'s B1 entry are
  * intentionally deferred until Lane A's A2-A4 (the manifest generator) land;
- * building them now would collide with that future work. See `HANDOVER.md`
+ * building them now would collide with that future work. See `ARCHITECTURE.md` / historical planning notes
  * for the follow-up note.
  */
 

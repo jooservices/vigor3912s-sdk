@@ -1,4 +1,4 @@
-# Implementation plan — Public Typed Operations API (HANDOVER.md §6c)
+# Implementation plan — Public Typed Operations API (ARCHITECTURE.md §6c)
 
 > **Superseded 2026-09-14:** Tasks that mandate `ChangePlan` / `denyAllVerifier` /
 > `createChangePlan` / `executeChangePlan` no longer match the code. Typed writes
@@ -32,7 +32,7 @@
 | `REQ-TYPED-3` Typed read invocation            | `AC-3.1` Canonical read operation dispatches through bounded runner. `AC-3.2` `executionOverride` is honored. `AC-3.3` Parsed output type is returned.                                                                                                                                                                                                     |
 | `REQ-TYPED-4` Forgery/write rejection          | `AC-4.1` Forged same-`manifestId` descriptor is rejected with `forged_operation_rejected`. `AC-4.2` Write/destructive descriptors passed to `invoke()` are rejected with `typed_write_requires_change_plan`.                                                                                                                                               |
 | `REQ-TYPED-5` ChangePlan typed write path      | `AC-5.1` `createChangePlan()` builds frames via `buildFrames`. `AC-5.2` `ChangePlanFrame` is real `CommandFrame`. `AC-5.3` `executeChangePlan()` runs verifier chain in order before dispatch. `AC-5.4` default `denyAllVerifier` rejects before dispatch. `AC-5.5` `DefaultTypedWriteExecutor` dispatches verified frames through `DefaultCommandRunner`. |
-| `REQ-TYPED-6` Docs/package honesty + QA        | `AC-6.1` README/HANDOVER/BACKLOG/docs describe public typed API and safety boundary honestly. `AC-6.2` Final native gate and isolated container QA pass.                                                                                                                                                                                                   |
+| `REQ-TYPED-6` Docs/package honesty + QA        | `AC-6.1` README/BACKLOG/docs describe public typed API and safety boundary honestly. `AC-6.2` Final native gate and isolated container QA pass.                                                                                                                                                                                                            |
 
 ---
 
@@ -851,7 +851,7 @@ npm run format:check && npm run lint && npm run typecheck && npm run build && np
 
 **Scope:**
 
-- README / API docs / HANDOVER / BACKLOG only.
+- README / API docs / BACKLOG only.
 - Update metadata honestly if needed.
 
 **Do NOT:**
@@ -866,7 +866,7 @@ npm run format:check && npm run lint && npm run typecheck && npm run build && np
 
 1. Edit `README.md`: add a read example (`operations.wan.wanStatus` via `client.invoke`) and a write example showing `createChangePlan()` + default denial.
 2. Add `docs/operations.md`: explain `./operations`, canonical descriptor requirement, `invoke()` read-only behavior, ChangePlan path, non-goals (no SSH, no MCP, no live E2E).
-3. Update `HANDOVER.md` §6c from pending to completed with the real final verification numbers.
+3. Update `ARCHITECTURE.md` / historical planning notes §6c from pending to completed with the real final verification numbers.
 4. Append `BACKLOG.md` "Wave 6" summary following existing convention.
 5. Update `src/index.ts` metadata only if current wording becomes misleading. Do not overstate runtime support.
 
@@ -893,7 +893,7 @@ npm run format:check && npm run lint && npm run typecheck && npm run build && np
 
 - `README.md`
 - `docs/operations.md`
-- `HANDOVER.md`
+- `ARCHITECTURE.md` / historical planning notes
 - `BACKLOG.md`
 - `src/index.ts` only if metadata needs honesty update
 
@@ -901,7 +901,7 @@ npm run format:check && npm run lint && npm run typecheck && npm run build && np
 
 - `README.md`
 - `docs/operations.md`
-- `HANDOVER.md`
+- `ARCHITECTURE.md` / historical planning notes
 - `BACKLOG.md`
 - `src/index.ts`
 

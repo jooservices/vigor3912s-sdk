@@ -3,3 +3,9 @@ title = "vigor3912s-sdk gitleaks config"
 
 [extend]
 useDefault = true
+
+[allowlist]
+# Synthetic CLI credentials in unit tests (fake transport only).
+paths = [
+  '''(^|/)tests/''',
+]
