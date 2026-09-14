@@ -19,11 +19,11 @@ describe("cli.ip6.internet", () => {
           wan: 2,
           mode: 2,
           username: "88886666",
-          password: "draytek123456",
+          password: "example-only",
           server: "amsterdam.freenet6.net",
         }),
       ).command,
-    ).toBe("ip6 internet -W 2 -M 2 -u 88886666 -p draytek123456 -s amsterdam.freenet6.net");
+    ).toBe("ip6 internet -W 2 -M 2 -u 88886666 -p example-only -s amsterdam.freenet6.net");
     expect(firstFrame(ip6Internet.buildFrames({ action: "view" })).command).toBe("ip6 internet -V");
     expect(firstFrame(ip6Internet.buildFrames({ action: "dial" })).command).toBe("ip6 internet -k");
     expect(firstFrame(ip6Internet.buildFrames({ action: "drop" })).command).toBe("ip6 internet -j");

@@ -1,12 +1,12 @@
 # Vigor3912S SDK — Implementation Backlog
 
-**Status:** Approved by user 2026-09-13. Single planning pass per `ARCHITECTURE.md`'s gate note — no second `joo-team-lead` run for this scope. Produced by `joo-team-lead` (Sonnet) from `HANDOVER.md` + `ARCHITECTURE.md` + current source.
+**Status:** Approved by user 2026-09-13. Single planning pass per `ARCHITECTURE.md`'s gate note — no second `joo-team-lead` run for this scope. Produced by `joo-team-lead` (Sonnet) from `ARCHITECTURE.md` / historical planning notes + `ARCHITECTURE.md` + current source.
 
 **Completion push (2026-09-13, root + joo-dev/reviewer/qa):** User directed 100% CLI command support. Outcome (verify green): **472 CLI ops implemented / 6 blocked-by-documentation / 0 documented remaining**; **24** `live-firmware-recon` additive entries implemented; **2114** tests. This is a historical CLI-completeness snapshot; the current SDK verification snapshot is below. Optional leftovers are enrichment/WebUI/live-E2E only — not missing CLI coverage.
 
 **SDK transport completion (2026-09-14, root verified):** REQ-SDK-1 through REQ-SDK-6 are complete. Current `npm run verify` is green: **494 test files / 2346 tests**, `manifest:check` covers **649 entries** (478 CLI + 171 WebUI), **472 operations / 42 domain modules**, and global coverage thresholds in `vitest.config.ts` are satisfied (statements **99.59%**, branches **94.28%**, functions **99.94%**, lines **99.59%**). `npm audit --audit-level=moderate` reports **0 vulnerabilities**. Independent container QA in `node:24.21.0-bookworm` with npm 12.0.2 passed: `npm ci`, `npm run verify`, `npm pack --dry-run`, and installed consumer smoke.
 
-**Standard verification gate** (every task, unless noted): per `HANDOVER.md` "Quality commands". As of 2026-09-13, run natively on host: `nvm use` from `sdk/` (picks up `.nvmrc` -> Node 24.21.0; `npm install -g npm@12.0.2` once if needed) — no Docker required day-to-day, since `sdk/` sits at its real path in the workspace and the manifest generator's cross-boundary read to `.ai/skills/vigor3912s/references/cli-reference-raw.txt` resolves correctly natively. The earlier Docker pattern (mounting `sdk/` read-only into `node:24.21.0-bookworm`, npm 12.0.2 installed only inside the container, `.env` never mounted, no E2E) remains an acceptable fallback if `nvm` is unavailable — in that case mount/copy the surrounding workspace (`.ai/`, `projects/vigor3912s/webui-capture/`, `sdk/`) preserving relative depth, not just `sdk/` alone.
+**Standard verification gate** (every task, unless noted): per `ARCHITECTURE.md` / historical planning notes "Quality commands". As of 2026-09-13, run natively on host: `nvm use` from `sdk/` (picks up `.nvmrc` -> Node 24.21.0; `npm install -g npm@12.0.2` once if needed) — no Docker required day-to-day, since `sdk/` sits at its real path in the workspace and the manifest generator's cross-boundary read to `.ai/skills/vigor3912s/references/cli-reference-raw.txt` resolves correctly natively. The earlier Docker pattern (mounting `sdk/` read-only into `node:24.21.0-bookworm`, npm 12.0.2 installed only inside the container, `.env` never mounted, no E2E) remains an acceptable fallback if `nvm` is unavailable — in that case mount/copy the surrounding workspace (`.ai/`, `projects/vigor3912s/webui-capture/`, `sdk/`) preserving relative depth, not just `sdk/` alone.
 
 ```
 nvm use && npm ci && npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm run verify
@@ -16,7 +16,7 @@ Add `npm audit --audit-level=moderate` when a task adds/updates a dependency. Ad
 
 DoD floor for every task: standard gate green; no new lint/typecheck suppressions; no `.env`/live/SSH/destructive-command code path introduced; existing Task 1-3 tests keep passing unmodified in behavior; reviewer + QA accept per `.ai/guides/subagent-delivery.md` phase gates.
 
-Traceability legend: `ARCH#Item-N` = `ARCHITECTURE.md` section; `ARCH#RDL-x` = a row in its resolved-decisions log; `HANDOVER#...` = the referenced HANDOVER.md content.
+Traceability legend: `ARCH#Item-N` = `ARCHITECTURE.md` section; `ARCH#RDL-x` = a row in its resolved-decisions log; `ARCH#...` = the referenced ARCHITECTURE.md content.
 
 ---
 
@@ -157,7 +157,7 @@ At the initial 2026-09-13 planning gate, the next recommended step was Wave 1 im
 
 ## Wave 5 — Public client `Transport` seam (user 2026-09-14)
 
-**Status: complete 2026-09-14.** Architecture amendment 2026-09-14 + `HANDOVER.md` §6a–§6b. CLI domain coverage (Wave 4) remains complete; this wave finished the **client-facing transport contract** and passed independent container QA.
+**Status: complete 2026-09-14.** Architecture amendment 2026-09-14 + `ARCHITECTURE.md` / historical planning notes §6a–§6b. CLI domain coverage (Wave 4) remains complete; this wave finished the **client-facing transport contract** and passed independent container QA.
 
 **T5.1/T5.3/T5.5 accepted 2026-09-14** (dev green, 493 files / 2120 tests, build emits `dist/transport/{index.d.ts,index.js}`, `manifest:check` unaffected). `src/transport/index.ts` re-exports `Transport`/`CommandExchange`/`TransportExchange`/`CommandFrame` on `package.json` `exports["./transport"]`; `Vigor3912SClient.fromTransport(transport)` added additively (zero-arg/`CommandRunner`-arg behavior unchanged); transport error codes (`sessionClosed`, `executionTimeout`, `outputLimitExceeded`) confirmed already public + asserted against real failure paths. No SSH, no import of `vigor3912s-client`. T5.2/T5.4/T5.6 were still tracked separately at that snapshot and are closed below.
 
