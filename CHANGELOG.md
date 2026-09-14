@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-14
+
 ### Added
 
 - Consumer usage guide at `docs/usage.md`.
@@ -21,8 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Internal `HANDOVER.md` (superseded by README + `docs/usage.md` +
   `ARCHITECTURE.md`).
-
-## [1.0.0] - 2026-09-14
 
 ### Added
 
