@@ -33,12 +33,23 @@ consume it from the checkout or a Git tag. See [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Installation
 
+Not published to npm. Install from GitHub (pin a tag or branch):
+
 ```bash
-# from a sibling checkout under JOOservices projects/
-npm install file:../vigor3912s-sdk
+npm install github:jooservices/vigor3912s-sdk#v1.0.0
 ```
 
-Or add a Git dependency pinned to a tag / `develop`.
+```json
+{
+  "dependencies": {
+    "@jooservices/vigor3912s-sdk": "github:jooservices/vigor3912s-sdk#v1.0.0"
+  }
+}
+```
+
+Local JOOservices workspace only (another package under `projects/`):
+`file:../vigor3912s-sdk` — that relative path is for sibling checkouts, not
+for a clone of this repo alone.
 
 ## Quick start
 
@@ -54,10 +65,12 @@ const raw = await client.execute("sys version");
 const parsed = await client.invoke(operations.wan.wanStatus, undefined);
 ```
 
-See [`docs/transport.md`](./docs/transport.md) for the implementor contract.
+Full embedder guide: [`docs/usage.md`](./docs/usage.md). Transport implementors:
+[`docs/transport.md`](./docs/transport.md).
 
 ## Documentation
 
+- [`docs/usage.md`](./docs/usage.md) — install, client API, operations, errors, live client
 - [`docs/transport.md`](./docs/transport.md) — public `Transport` semantics
 - [`CHANGELOG.md`](./CHANGELOG.md)
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md)
