@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.build.json",
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "dist",
+    "coverage",
+    "src/manifest/capability-manifest.generated.ts",
+    "src/internal/registry/registry.generated.ts"
+  ]
+}

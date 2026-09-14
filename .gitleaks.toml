@@ -1,0 +1,5 @@
+# Gitleaks config for jooservices/vigor3912s-sdk.
+title = "vigor3912s-sdk gitleaks config"
+
+[extend]
+useDefault = true

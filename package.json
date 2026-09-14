@@ -1,0 +1,57 @@
+{
+  "name": "@jooservices/vigor3912s-sdk",
+  "version": "1.0.0",
+  "description": "Node 24 TypeScript SDK for typed DrayTek Vigor3912S CLI operations with public Transport injection.",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@12.0.2",
+  "engines": {
+    "node": ">=24.21.0 <25",
+    "npm": ">=12.0.2 <13"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./live": {
+      "types": "./dist/live/live-read-only-client.d.ts",
+      "import": "./dist/live/live-read-only-client.js"
+    },
+    "./operations": {
+      "types": "./dist/operations/index.d.ts",
+      "import": "./dist/operations/index.js"
+    },
+    "./transport": {
+      "types": "./dist/transport/index.d.ts",
+      "import": "./dist/transport/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "ci": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm test && npm run manifest:check && npm run test:coverage && npm audit --audit-level=moderate",
+    "fixtures:import": "npm run build && node --experimental-strip-types tools/import-redacted-fixture.ts",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "lint": "eslint .",
+    "manifest:check": "tsc -p tsconfig.generator.json && node --experimental-strip-types tools/generate-capability-manifest.ts --check",
+    "manifest:generate": "tsc -p tsconfig.generator.json && node --experimental-strip-types tools/generate-capability-manifest.ts",
+    "test": "npm run build && vitest run",
+    "test:coverage": "npm run build && vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify": "npm run ci"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.5.1",
+    "@vitest/coverage-v8": "5.0.0",
+    "eslint": "10.10.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.0",
+    "vitest": "5.0.0"
+  }
+}

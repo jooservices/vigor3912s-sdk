@@ -1,0 +1,43 @@
+import { describe, expect, it } from "vitest";
+
+import { appqosTraceableView } from "../../../src/domains/appqos.js";
+import { parseTraceableView } from "../../../src/internal/parsers/appqos/traceable-view.js";
+import {
+  dispatchThroughFakeTransport,
+  expectClosedTransportFailure,
+  expectManifestLinkage,
+  firstFrame,
+} from "./support.js";
+
+const SAMPLE_TEXT = "% Traceable AP list\\n";
+
+describe("cli.appqos.traceable.v -- appqos traceable -v (read)", () => {
+  it("builds the documented no-argument frame", () => {
+    const frames = appqosTraceableView.buildFrames(undefined);
+
+    expect(frames).toHaveLength(1);
+    expect(firstFrame(frames).command).toBe("appqos traceable -v");
+  });
+
+  it("parses the documented acknowledgement text (synthetic sample)", () => {
+    expect(parseTraceableView(SAMPLE_TEXT)).toEqual({ raw: "% Traceable AP list\\n" });
+  });
+
+  it("links to the capability manifest as a read operation", () => {
+    expectManifestLinkage(appqosTraceableView, "read");
+  });
+
+  it("round-trips through a fake transport and surfaces closed-session failure", async () => {
+    const command = firstFrame(appqosTraceableView.buildFrames(undefined)).command;
+    const { stdout } = await dispatchThroughFakeTransport(command, SAMPLE_TEXT);
+
+    expect(stdout).toBe(SAMPLE_TEXT);
+    await expectClosedTransportFailure(command);
+  });
+
+  it("parses through the operation's own `parse` using the first exchange's stdout", () => {
+    expect(appqosTraceableView.parse([{ stdout: SAMPLE_TEXT, stderr: "" }])).toEqual({
+      raw: "% Traceable AP list\\n",
+    });
+  });
+});

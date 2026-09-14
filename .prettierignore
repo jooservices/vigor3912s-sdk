@@ -1,0 +1,7 @@
+dist/
+node_modules/
+coverage/
+coverage-*/
+package-lock.json
+references/cli-reference-raw.txt
+references/webui-index.md
