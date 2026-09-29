@@ -7,10 +7,8 @@
  * trimmed raw text rather than inventing structure (YAGNI).
  */
 
-export interface SysPollbuf {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseSysPollbuf(text: string): SysPollbuf {
-  return { raw: text.trim() };
-}
+export type SysPollbuf = RawCommandOutput;
+
+export const parseSysPollbuf: (text: string) => SysPollbuf = parseRawText;

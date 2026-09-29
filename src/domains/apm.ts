@@ -20,7 +20,6 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseEnable } from "../internal/parsers/apm/enable.js";
 import { parseDisable } from "../internal/parsers/apm/disable.js";
@@ -42,49 +41,14 @@ import { parseApsyslog } from "../internal/parsers/apm/apsyslog.js";
 import { parseSyslog } from "../internal/parsers/apm/syslog.js";
 import { parseStanum, type ApmStationCountReport } from "../internal/parsers/apm/stanum.js";
 import type { RawCommandOutput } from "../internal/parsers/apm/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertPositiveInteger(value: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertNonEmptyString(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
-  }
-}
-
-function assertNumberOneOf<T extends number>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly number[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => String(entry)).join(", ")} (got ${String(value)}).`,
-    );
-  }
-}
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertNumberOneOf,
+  assertPositiveInteger,
+  assertTupleLength,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.apm.enable / disable / show / clear / discover / query (rawLine 12017)
@@ -197,7 +161,7 @@ export interface ApmProfileCloneInput {
 function buildProfileCloneFrames(input: ApmProfileCloneInput): readonly CommandFrame[] {
   assertPositiveInteger(input.fromIndex, "fromIndex");
   assertPositiveInteger(input.toIndex, "toIndex");
-  assertNonEmptyString(input.newName, "newName");
+  assertCliValue(input.newName, "newName");
 
   return [
     frameSingleCommand(
@@ -248,6 +212,8 @@ export interface ApmProfileApplyInput {
 
 function buildProfileApplyFrames(input: ApmProfileApplyInput): readonly CommandFrame[] {
   assertPositiveInteger(input.profileIndex, "profileIndex");
+
+  assertTupleLength(input.clientIndexes, 5, "clientIndexes");
 
   for (const clientIndex of input.clientIndexes) {
     assertPositiveInteger(clientIndex, "each clientIndexes entry");

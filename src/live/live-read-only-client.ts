@@ -36,26 +36,25 @@
  * runner/transport accessor, and no way to reach a non-allowlisted or
  * non-read operation, not even indirectly.
  *
- * **`Transport`'s actual shape has no `connect()` method** (`isOpen`,
- * `send`, `close` only — see `internal/execution/transport.ts`, Wave 1 Lane
- * C's C4). This module therefore treats "before connecting" as "before the
- * transport is ever used to `send` anything": every guard in `create()`
- * runs, and can throw, before `#transport` is stored on the returned
- * instance is ever read or called. `create()` never calls `.send`,
- * `.isOpen`, or `.close` on the injected transport; only a later, separate
- * `invoke()` call (after successful construction) does.
+ * **`Transport` has no `connect()` method**, so "before connecting" means
+ * "before the transport is ever used": every guard in `create()` runs, and
+ * can throw, without calling `send`, `stream`, `isOpen` or `close`. `create()`
+ * reads only `remoteEndpoint` to bind the LAN-only policy to the real peer;
+ * a later `invoke()` re-checks it and is the only path that sends.
  */
 
 import { Vigor3912SError, sdkErrorCodes } from "../errors.js";
 import { DefaultCommandRunner } from "../internal/execution/default-runner.js";
+import { runOperation } from "../internal/execution/run-operation.js";
 import { defaultExecutionLimits, type ExecutionLimits } from "../internal/execution/limits.js";
 import type { Transport } from "../internal/execution/transport.js";
+import { isIP } from "node:net";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { operationRegistry } from "../internal/registry/registry.generated.js";
 import type { CapabilityEntry } from "../manifest/types.js";
 import { capabilityManifest } from "../manifest/index.js";
 import { liveReadOnlyAllowlist } from "./allowlist.js";
-import type { TransportPolicy } from "./policy.js";
+import { defaultSessionPolicy, type SessionPolicy, type TransportPolicy } from "./policy.js";
 
 export class LiveClientRejectedError extends Vigor3912SError {
   public constructor(message: string) {
@@ -68,7 +67,13 @@ export interface LiveReadOnlyClientOptions {
   /** Ids the caller wants exposed; every one must independently pass guard 2. */
   readonly operationIds: readonly string[];
   readonly transportPolicy: TransportPolicy;
-  /** Injected `Transport` port; never touched unless every guard passes. */
+  /** Defaults to `defaultSessionPolicy`: idle timeout per command + overall session lifetime. */
+  readonly sessionPolicy?: SessionPolicy;
+  /**
+   * Injected `Transport` port; never sent a command unless every guard
+   * passes. Must expose `remoteEndpoint` (the connected peer's IP and port):
+   * the LAN-only policy is bound to that endpoint, not to caller claims.
+   */
   readonly transport: Transport;
   readonly executionLimits?: ExecutionLimits;
   /**
@@ -115,6 +120,90 @@ function assertHostPolicy(policy: TransportPolicy): void {
   }
 }
 
+function ipv4Octets(address: string): readonly number[] {
+  return address.split(".").map(Number);
+}
+
+/** RFC 1918 private IPv4, IPv4 link-local, IPv6 unique-local (fc00::/7) or link-local (fe80::/10). */
+export function isPrivateLanAddress(address: string): boolean {
+  const version = isIP(address);
+
+  if (version === 4) {
+    const [a = -1, b = -1] = ipv4Octets(address);
+
+    return (
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254)
+    );
+  }
+
+  if (version === 6) {
+    const lowered = address.toLowerCase();
+    const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lowered)?.[1];
+
+    if (mapped !== undefined) {
+      return isPrivateLanAddress(mapped);
+    }
+
+    // Only a full first hextet can be fc00::/7 or fe80::/10 (`fc::1` is 00fc::).
+    return /^f[cd][0-9a-f]{2}:/.test(lowered) || /^fe[89ab][0-9a-f]:/.test(lowered);
+  }
+
+  return false;
+}
+
+/**
+ * Guard 3b (re-run before every command): the transport's actual peer must
+ * be a private-LAN IP literal on the policy port. Binds the declarative
+ * `allowedHostKinds: ["private-lan"]` to what the transport really reaches.
+ */
+function assertEndpointPolicy(transport: Transport, policy: TransportPolicy): void {
+  const endpoint = transport.remoteEndpoint;
+
+  if (endpoint === undefined) {
+    throw new LiveClientRejectedError(
+      "Transport.remoteEndpoint is required so the LAN-only policy can verify the real peer.",
+    );
+  }
+
+  if (isIP(endpoint.address) === 0) {
+    throw new LiveClientRejectedError(
+      "Transport.remoteEndpoint.address must be the resolved peer IP, not a hostname.",
+    );
+  }
+
+  if (!isPrivateLanAddress(endpoint.address)) {
+    throw new LiveClientRejectedError(
+      "Transport.remoteEndpoint.address is not a private-LAN address; refusing a non-LAN peer.",
+    );
+  }
+
+  if (endpoint.port !== policy.port) {
+    throw new LiveClientRejectedError(
+      `Transport.remoteEndpoint.port does not match TransportPolicy.port (${String(policy.port)}).`,
+    );
+  }
+}
+
+function assertSessionPolicy(policy: SessionPolicy): void {
+  const maxConcurrentCommands: unknown = policy.maxConcurrentCommands;
+
+  if (maxConcurrentCommands !== 1) {
+    throw new LiveClientRejectedError("SessionPolicy.maxConcurrentCommands must be 1.");
+  }
+
+  for (const [name, value] of [
+    ["idleTimeoutMs", policy.idleTimeoutMs],
+    ["maxSessionMs", policy.maxSessionMs],
+  ] as const) {
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new LiveClientRejectedError(`SessionPolicy.${name} must be a positive integer.`);
+    }
+  }
+}
+
 /**
  * Guard 4: walks the instance's own property names and its prototype's own
  * property names (excluding `constructor`) and rejects if anything outside
@@ -140,14 +229,25 @@ function assertSurfaceIsReadOnly(instance: object): void {
 export class LiveReadOnlyClient {
   readonly #operations: ReadonlyMap<string, TypedOperation<never, unknown>>;
   readonly #runner: DefaultCommandRunner;
+  readonly #transport: Transport;
+  readonly #transportPolicy: TransportPolicy;
+  readonly #expiresAt: number;
 
   private constructor(
     operations: ReadonlyMap<string, TypedOperation<never, unknown>>,
     transport: Transport,
+    transportPolicy: TransportPolicy,
+    sessionPolicy: SessionPolicy,
     limits: ExecutionLimits,
   ) {
     this.#operations = operations;
-    this.#runner = new DefaultCommandRunner(transport, limits);
+    this.#transport = transport;
+    this.#transportPolicy = transportPolicy;
+    this.#expiresAt = Date.now() + sessionPolicy.maxSessionMs;
+    this.#runner = new DefaultCommandRunner(transport, {
+      ...limits,
+      idleTimeoutMs: Math.min(limits.idleTimeoutMs, sessionPolicy.idleTimeoutMs),
+    });
     Object.freeze(this);
   }
 
@@ -172,18 +272,17 @@ export class LiveReadOnlyClient {
       );
     }
 
-    const frames = operation.buildFrames(undefined as never);
-    const exchanges = [];
-
-    for (const frame of frames) {
-      const result = await this.#runner.runWithOverride(
-        frame.command,
-        operation.executionOverride ?? {},
+    if (Date.now() >= this.#expiresAt) {
+      await this.#runner.close("max_session_exceeded");
+      throw new LiveClientRejectedError(
+        "SessionPolicy.maxSessionMs elapsed; this read-only client is closed.",
       );
-      exchanges.push({ stdout: result.stdout, stderr: result.stderr });
     }
 
-    return operation.parse(exchanges);
+    // The transport may have reconnected since create(): re-bind the policy.
+    assertEndpointPolicy(this.#transport, this.#transportPolicy);
+
+    return runOperation(this.#runner, operation, undefined as never);
   }
 
   /**
@@ -239,13 +338,17 @@ export class LiveReadOnlyClient {
       operations.set(id, operation);
     }
 
-    // Guard 3: transport policy host-kind/shape check (structural only --
-    // there is no real transport to probe yet).
+    // Guard 3: policy shape, then the transport's real endpoint against it.
     assertHostPolicy(options.transportPolicy);
+    const sessionPolicy = options.sessionPolicy ?? defaultSessionPolicy;
+    assertSessionPolicy(sessionPolicy);
+    assertEndpointPolicy(options.transport, options.transportPolicy);
 
     const client = new LiveReadOnlyClient(
       operations,
       options.transport,
+      options.transportPolicy,
+      sessionPolicy,
       options.executionLimits ?? defaultExecutionLimits,
     );
 

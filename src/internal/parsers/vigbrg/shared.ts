@@ -13,13 +13,7 @@
  * shared file), per this family's own parser directory.
  */
 
-export interface RawCommandOutput {
-  readonly raw: string;
-}
-
-export function parseRawText(text: string): RawCommandOutput {
-  return { raw: text.trim() };
-}
+export { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
 /** One row of the documented "WAN mac table" printed by `vigbrg wanstatus` / `vigbrg wlanstatus`. */
 export interface VigbrgMacTableEntry {
@@ -31,7 +25,8 @@ export interface VigbrgMacTableEntry {
 }
 
 export interface VigbrgMacTableReport {
-  readonly bridgeState: string;
+  /** `null` when the `Vigor Bridge:` line is missing. */
+  readonly bridgeState: string | null;
   readonly entries: readonly VigbrgMacTableEntry[];
 }
 
@@ -45,7 +40,7 @@ const HEADER_PATTERN = /Index\s+MAC Address\s+Stamp Time\s+PVC\s+VLan\s+Port/i;
  */
 export function parseVigbrgMacTable(text: string): VigbrgMacTableReport {
   const stateMatch = BRIDGE_STATE_PATTERN.exec(text);
-  const bridgeState = stateMatch?.[1] ?? "";
+  const bridgeState = stateMatch?.[1] ?? null;
 
   const lines = text.split(/\r?\n/);
   const headerIndex = lines.findIndex((line) => HEADER_PATTERN.test(line));

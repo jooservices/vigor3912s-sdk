@@ -20,13 +20,23 @@
  * against a live router from SDK tests (fake transport only).
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import { parseMngtAck, type MngtAck } from "../internal/parsers/mngt/ack.js";
 import { parseMngtTimeoutAck, type MngtTimeoutAck } from "../internal/parsers/mngt/timeout.js";
 import { parseCertImport } from "../internal/parsers/mngt/cert-import.js";
 import { parseIp6Iids } from "../internal/parsers/mngt/ip6-iids.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
+import {
+  assertArgsShape,
+  assertCliValue,
+  assertIntegerInRange,
+  assertKnownFlags,
+  assertOneOf,
+  defineCommandOperation,
+  defineRawOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // Shared, local (non-shared-file) validation helpers.
@@ -40,24 +50,6 @@ import type { TypedOperation } from "../internal/registry/operation.js";
 // duplicated logic here.
 // ---------------------------------------------------------------------------
 
-function assertNonEmptyToken(value: string, label: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${label} must not be empty or whitespace-only.`);
-  }
-  if (/\s/.test(value)) {
-    throw new Error(`${label} must not contain whitespace.`);
-  }
-}
-
-function assertArgsShape(args: readonly string[], label: string): void {
-  if (args.length === 0) {
-    throw new Error(`${label} requires at least one argument token.`);
-  }
-  for (const [index, token] of args.entries()) {
-    assertNonEmptyToken(token, `${label} argument #${String(index + 1)}`);
-  }
-}
-
 /**
  * TCP/UDP port bound (1-65535). The documented syntax for every `mngt
  * *port` command only states "type the number for <X> port" plus its
@@ -68,52 +60,19 @@ function assertArgsShape(args: readonly string[], label: string): void {
  */
 function assertPortNumber(value: number, label: string): void {
   if (!Number.isInteger(value) || value < 1 || value > 65535) {
-    throw new Error(`${label} must be an integer between 1 and 65535 (got ${String(value)}).`);
+    throw new InvalidInputError(
+      `${label} must be an integer between 1 and 65535 (got ${String(value)}).`,
+    );
   }
 }
 
 /** Documented range for `mngt telnettimeout`/`mngt sshtimeout`: 60-300 (rawLine 4573/4584). */
 function assertTimeoutSeconds(value: number, label: string): void {
   if (!Number.isInteger(value) || value < 60 || value > 300) {
-    throw new Error(`${label} must be an integer between 60 and 300 (got ${String(value)}).`);
+    throw new InvalidInputError(
+      `${label} must be an integer between 60 and 300 (got ${String(value)}).`,
+    );
   }
-}
-
-function assertOneOf<T extends string>(
-  value: string,
-  allowed: readonly T[],
-  label: string,
-): asserts value is T {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(`${label} must be one of ${allowed.join(", ")} (got "${value}").`);
-  }
-}
-
-/**
- * Validates that every flag-shaped token (`-x`) in `args` belongs to
- * `allowedFlags`; non-flag tokens (values following a flag, e.g. an IP
- * address or community name) are left to `frameSingleCommand`'s injection
- * checks rather than re-validated here (YAGNI — the documented flag syntax
- * for `mngt lanaccess`/`mngt snmp`/`mngt bfp` does not constrain value
- * shapes beyond "a proper name/number").
- */
-function assertKnownFlags(
-  args: readonly string[],
-  allowedFlags: readonly string[],
-  label: string,
-): void {
-  for (const token of args) {
-    if (token.startsWith("-") && !allowedFlags.includes(token)) {
-      throw new Error(
-        `${label} flag "${token}" is not one of the documented flags: ${allowedFlags.join(", ")}.`,
-      );
-    }
-  }
-}
-
-function firstExchangeStdout(exchanges: readonly unknown[]): string {
-  const first = exchanges[0] as CommandExchange | undefined;
-  return first?.stdout ?? "";
 }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +96,7 @@ function definePortOperation(
       assertPortNumber(input.port, label);
       return [frameSingleCommand(`mngt ${commandWord} ${String(input.port)}`)];
     },
-    parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+    parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
   };
 }
 
@@ -175,7 +134,7 @@ const mngtNoping: TypedOperation<MngtNopingInput, MngtAck> = {
     assertOneOf(input.action, MNGT_NOPING_ACTIONS, "mngt noping action");
     return [frameSingleCommand(`mngt noping ${input.action}`)];
   },
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -199,7 +158,7 @@ const mngtDefenseworm: TypedOperation<MngtDefenseWormInput, MngtAck> = {
     assertOneOf(input.action, MNGT_DEFENSEWORM_SIMPLE_ACTIONS, "mngt defenseworm action");
     return [frameSingleCommand(`mngt defenseworm ${input.action}`)];
   },
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -210,7 +169,7 @@ const mngtRmtcfgStatus: TypedOperation<void, MngtAck> = {
   manifestId: "cli.mngt.rmtcfg.status",
   classification: "read",
   buildFrames: () => [frameSingleCommand("mngt rmtcfg status")],
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -223,7 +182,7 @@ const mngtRmtcfgEnable: TypedOperation<void, MngtAck> = {
   manifestId: "cli.mngt.rmtcfg.enable",
   classification: "destructive",
   buildFrames: () => [frameSingleCommand("mngt rmtcfg enable")],
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -234,7 +193,7 @@ const mngtRmtcfgDisable: TypedOperation<void, MngtAck> = {
   manifestId: "cli.mngt.rmtcfg.disable",
   classification: "write",
   buildFrames: () => [frameSingleCommand("mngt rmtcfg disable")],
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -272,7 +231,7 @@ const mngtRmtcfgProtocol: TypedOperation<MngtRmtcfgProtocolInput, MngtAck> = {
     assertOneOf(input.onOff, MNGT_RMTCFG_ON_OFF, "mngt rmtcfg on/off value");
     return [frameSingleCommand(`mngt rmtcfg ${input.protocol} ${input.onOff}`)];
   },
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -293,7 +252,7 @@ const mngtLanaccess: TypedOperation<MngtLanaccessInput, MngtAck> = {
     assertKnownFlags(input.args, MNGT_LANACCESS_FLAGS, "mngt lanaccess");
     return [frameSingleCommand(`mngt lanaccess ${input.args.join(" ")}`)];
   },
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -315,7 +274,7 @@ const mngtEchoicmp: TypedOperation<MngtEchoIcmpInput, MngtAck> = {
     assertOneOf(input.action, MNGT_ECHOICMP_ACTIONS, "mngt echoicmp action");
     return [frameSingleCommand(`mngt echoicmp ${input.action}`)];
   },
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -337,7 +296,7 @@ const mngtAccesslist: TypedOperation<MngtAccesslistInput, MngtAck> = {
     assertOneOf(subcommand ?? "", MNGT_ACCESSLIST_SUBCOMMANDS, "mngt accesslist subcommand");
     return [frameSingleCommand(`mngt accesslist ${input.args.join(" ")}`)];
   },
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -359,7 +318,7 @@ const mngtWanlogin: TypedOperation<MngtWanloginInput, MngtAck> = {
     assertOneOf(input.action, MNGT_WANLOGIN_ACTIONS, "mngt wanlogin action");
     return [frameSingleCommand(`mngt wanlogin ${input.action}`)];
   },
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -397,7 +356,7 @@ const mngtSnmp: TypedOperation<MngtSnmpInput, MngtAck> = {
     assertKnownFlags(input.args, MNGT_SNMP_FLAGS, "mngt snmp");
     return [frameSingleCommand(`mngt snmp ${input.args.join(" ")}`)];
   },
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -418,7 +377,7 @@ const mngtBfp: TypedOperation<MngtBfpInput, MngtAck> = {
     assertKnownFlags(input.args, MNGT_BFP_FLAGS, "mngt bfp");
     return [frameSingleCommand(`mngt bfp ${input.args.join(" ")}`)];
   },
-  parse: (exchanges) => parseMngtAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -437,7 +396,7 @@ const mngtTelnettimeout: TypedOperation<MngtTimeoutInput, MngtTimeoutAck> = {
     assertTimeoutSeconds(input.seconds, "mngt telnettimeout seconds");
     return [frameSingleCommand(`mngt telnettimeout ${String(input.seconds)}`)];
   },
-  parse: (exchanges) => parseMngtTimeoutAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtTimeoutAck(firstExchangeText(exchanges)),
 };
 
 const mngtSshtimeout: TypedOperation<MngtTimeoutInput, MngtTimeoutAck> = {
@@ -447,7 +406,7 @@ const mngtSshtimeout: TypedOperation<MngtTimeoutInput, MngtTimeoutAck> = {
     assertTimeoutSeconds(input.seconds, "mngt sshtimeout seconds");
     return [frameSingleCommand(`mngt sshtimeout ${String(input.seconds)}`)];
   },
-  parse: (exchanges) => parseMngtTimeoutAck(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseMngtTimeoutAck(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -465,10 +424,10 @@ export type MngtCertImportInput =
   | { readonly kind: "trusted_ca"; readonly url: string };
 
 function buildCertImportFrames(input: MngtCertImportInput) {
-  assertNonEmptyToken(input.url, "url");
+  assertCliValue(input.url, "url");
 
   if (input.kind === "local_cert") {
-    assertNonEmptyToken(input.password, "password");
+    assertCliValue(input.password, "password");
 
     return [frameSingleCommand(`mngt cert_import local_cert ${input.url} ${input.password}`)];
   }
@@ -480,7 +439,7 @@ export const mngtCertImport: TypedOperation<MngtCertImportInput, MngtAck> = {
   manifestId: "cli.mngt.certimport",
   classification: "write",
   buildFrames: buildCertImportFrames,
-  parse: (exchanges) => parseCertImport(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseCertImport(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -501,13 +460,13 @@ function buildIp6IidsFrames(input: MngtIp6IidsInput) {
       // cast callers are rejected without tripping
       // `@typescript-eslint/no-unnecessary-condition` on the 0|1 literal type.
       if (!(ALLOWED_IP6_IIDS_MODES as readonly number[]).includes(input.mode)) {
-        throw new Error(`mode must be one of 0, 1 (got ${String(input.mode)}).`);
+        throw new InvalidInputError(`mode must be one of 0, 1 (got ${String(input.mode)}).`);
       }
 
       return [frameSingleCommand(`mngt ip6_IIDs -e ${String(input.mode)}`)];
     }
     case "regenerate": {
-      assertNonEmptyToken(input.iface, "iface");
+      assertCliValue(input.iface, "iface");
 
       return [frameSingleCommand(`mngt ip6_IIDs -r ${input.iface}`)];
     }
@@ -521,8 +480,58 @@ export const mngtIp6Iids: TypedOperation<MngtIp6IidsInput, MngtAck> = {
   manifestId: "cli.mngt.ip6iids",
   classification: "write",
   buildFrames: buildIp6IidsFrames,
-  parse: (exchanges) => parseIp6Iids(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseIp6Iids(firstExchangeText(exchanges)),
 };
+
+// ---------------------------------------------------------------------------
+// Live-firmware-recon operations (fw 4.4.7_RC2 `?` help, owner capture in
+// `references/live-help-fw-4.4.7_RC2.txt`); absent from the Part VIII PDF.
+// ---------------------------------------------------------------------------
+
+export interface MngtToggleInput {
+  readonly enabled: boolean;
+}
+
+function toggleOperation(manifestId: string, command: string) {
+  return defineRawOperation<MngtToggleInput>(
+    manifestId,
+    "write",
+    (input) => `${command} ${input.enabled ? "enable" : "disable"}`,
+  );
+}
+
+/** Legacy SSH key-exchange algorithms. */
+export const mngtSshOldKex = toggleOperation("cli.mngt.ssholdkex", "mngt ssh_oldkex");
+/** Unencrypted L2TP management tunnel (the help warns of security holes). */
+export const mngtNoSecureL2tpMngt = toggleOperation(
+  "cli.mngt.nosecurel2tpmngt",
+  "mngt NoSecureL2TPMngt",
+);
+export const mngtValidationCode = toggleOperation("cli.mngt.validationcode", "mngt ValidationCode");
+
+export type MngtLbInterfaceInput =
+  { readonly action: "on" | "off" } | { readonly action: "lan"; readonly lan: number };
+
+/** Loopback interface on/off, or bind it to LAN1..LAN100. */
+export const mngtLbInterface = defineRawOperation<MngtLbInterfaceInput>(
+  "cli.mngt.lbinterface",
+  "write",
+  (input) => {
+    if (input.action === "lan") {
+      assertIntegerInRange(input.lan, 1, 100, "lan");
+      return `mngt lb_interface lan ${String(input.lan)}`;
+    }
+
+    assertOneOf(input.action, ["on", "off"], "action");
+    return `mngt lb_interface ${input.action}`;
+  },
+);
+
+export const mngtLbInterfaceStatus = defineCommandOperation(
+  "cli.mngt.lbinterface.status",
+  "read",
+  "mngt lb_interface status",
+);
 
 export const operations: readonly TypedOperation<never, unknown>[] = [
   mngtFtpport,
@@ -547,4 +556,9 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   mngtSshtimeout,
   mngtCertImport,
   mngtIp6Iids,
+  mngtSshOldKex,
+  mngtNoSecureL2tpMngt,
+  mngtValidationCode,
+  mngtLbInterface,
+  mngtLbInterfaceStatus,
 ];

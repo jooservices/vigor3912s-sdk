@@ -19,7 +19,7 @@ const SAMPLE_VIEW_TEXT = [
 
 describe("cli.ipf.view -- ipf view [-VcdhrtzZ] (read)", () => {
   it("builds the documented frame with and without flags, rejecting invalid ones", () => {
-    expect(firstFrame(ipfView.buildFrames(undefined)).command).toBe("ipf view");
+    expect(firstFrame(ipfView.buildFrames({})).command).toBe("ipf view");
     expect(firstFrame(ipfView.buildFrames({ flags: ["V", "d"] })).command).toBe("ipf view -V -d");
 
     expect(() => ipfView.buildFrames({ flags: ["x" as unknown as "V"] })).toThrow(/flag/);
@@ -37,7 +37,9 @@ describe("cli.ipf.view -- ipf view [-VcdhrtzZ] (read)", () => {
       loggingAvailable: true,
     });
 
-    expect(parseView("not a documented shape")).toEqual({});
+    expect(
+      Object.values(parseView("not a documented shape")).every((value) => value === null),
+    ).toBe(true);
   });
 
   it("links to the capability manifest as a read operation", () => {
@@ -61,7 +63,15 @@ describe("cli.ipf.view -- ipf view [-VcdhrtzZ] (read)", () => {
     await expectClosedTransportFailure(command);
   });
 
-  it("parses an empty report when no exchange is present (defensive fallback)", () => {
-    expect(ipfView.parse([])).toEqual({});
+  it("reports every field as unknown when no exchange is present (defensive fallback)", () => {
+    expect(ipfView.parse([])).toEqual({
+      version: null,
+      kernelVersion: null,
+      running: null,
+      logFlags: null,
+      logFlagsDescription: null,
+      defaultPolicy: null,
+      loggingAvailable: null,
+    });
   });
 });

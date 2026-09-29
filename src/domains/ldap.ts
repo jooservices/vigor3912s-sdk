@@ -32,65 +32,18 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseUser } from "../internal/parsers/ldap/user.js";
 import { parseSet } from "../internal/parsers/ldap/set.js";
 import { parseLdapView, type LdapViewReport } from "../internal/parsers/ldap/view.js";
 import type { RawCommandOutput } from "../internal/parsers/ldap/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertNonEmpty(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
-  }
-}
-
-/**
- * Generic runtime membership check for narrow string/number-literal-union
- * inputs. Declared generically (rather than as direct `!==` comparisons
- * against the union's own members) so `@typescript-eslint/no-unnecessary-
- * condition` doesn't flag it as statically-impossible: TypeScript's own
- * literal types only describe well-behaved callers, but this validation
- * exists precisely for callers (including plain-JS callers and tests) that
- * don't honor them.
- */
-function assertOneOf<T>(value: T, allowed: readonly T[], name: string): void {
-  if (!allowed.includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${String(entry)}"`).join(", ")} (got "${String(value)}").`,
-    );
-  }
-}
-
-const IPV4_PATTERN = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-
-function assertIpv4(value: string, name: string): void {
-  if (!IPV4_PATTERN.test(value)) {
-    throw new Error(`${name} must be a valid IPv4 address (got "${value}").`);
-  }
-}
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertIpv4,
+  assertOneOf,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.ldap.user -- `ldap user <INDEX><OPTION>` (rawLine 4033) -- write
@@ -114,27 +67,27 @@ function buildUserFrames(input: LdapUserInput): readonly CommandFrame[] {
 
   switch (input.action) {
     case "name": {
-      assertNonEmpty(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [frameSingleCommand(`${prefix} -n ${input.value}`)];
     }
     case "baseDn": {
-      assertNonEmpty(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [frameSingleCommand(`${prefix} -b ${input.value}`)];
     }
     case "filter": {
-      assertNonEmpty(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [frameSingleCommand(`${prefix} -a ${input.value}`)];
     }
     case "groupDn": {
-      assertNonEmpty(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [frameSingleCommand(`${prefix} -g ${input.value}`)];
     }
     case "commonName": {
-      assertNonEmpty(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [frameSingleCommand(`${prefix} -c ${input.value}`)];
     }
@@ -188,12 +141,12 @@ function buildSetFrames(input: LdapSetInput): readonly CommandFrame[] {
       return [frameSingleCommand(`ldap set port ${String(input.port)}`)];
     }
     case "dn": {
-      assertNonEmpty(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [frameSingleCommand(`ldap set dn ${input.value}`)];
     }
     case "password": {
-      assertNonEmpty(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [frameSingleCommand(`ldap set PWD ${input.value}`)];
     }

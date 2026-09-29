@@ -1,6 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    // Real emit (`noEmit: false` below) is incompatible with the base
+    // config's `allowImportingTsExtensions` (only valid with `noEmit`/
+    // `emitDeclarationOnly`); moot anyway since `tools/**` is excluded here.
+    "allowImportingTsExtensions": false,
     "declaration": true,
     "declarationMap": true,
     "noEmit": false,

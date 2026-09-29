@@ -12,6 +12,7 @@ import type { ExecutionLimits } from "../../src/internal/execution/limits.js";
 import type {
   CommandExchange,
   Transport,
+  TransportEndpoint,
   TransportExchange,
 } from "../../src/internal/execution/transport.js";
 
@@ -31,6 +32,8 @@ export interface FakeTransportOptions {
   readonly responder?: FakeTransportResponder;
   /** FIFO canned responses, consumed one per `send()` call. */
   readonly responses?: readonly TransportExchange[];
+  /** Peer reported via `Transport.remoteEndpoint` (mutable to simulate reconnects). */
+  readonly remoteEndpoint?: TransportEndpoint;
 }
 
 export function exchange(stdout: string, stderr = ""): CommandExchange {
@@ -44,9 +47,12 @@ export class FakeTransport implements Transport {
   public readonly calls: FakeTransportCall[] = [];
   public closeReason: string | undefined;
 
+  public remoteEndpoint: TransportEndpoint | undefined;
+
   public constructor(options: FakeTransportOptions = {}) {
     this.#queue = options.responses !== undefined ? [...options.responses] : [];
     this.#responder = options.responder;
+    this.remoteEndpoint = options.remoteEndpoint;
   }
 
   public get isOpen(): boolean {

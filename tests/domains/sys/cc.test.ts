@@ -33,10 +33,10 @@ describe("sys cc", () => {
     });
   });
 
-  it("returns empty strings for text that doesn't match the documented shape", () => {
+  it("returns null fields for text that doesn't match the documented shape", () => {
     const parsed = operation.parse(exchanges("% Command Error"));
 
-    expect(parsed).toEqual({ countryCode: "", wirelessRegionCode: "" });
+    expect(parsed).toEqual({ countryCode: null, wirelessRegionCode: null });
   });
 
   it("is linked in the manifest as implemented, classification read", () => {

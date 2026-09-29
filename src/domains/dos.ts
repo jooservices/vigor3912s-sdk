@@ -22,7 +22,6 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseView } from "../internal/parsers/dos/view.js";
 import { parseActivate } from "../internal/parsers/dos/activate.js";
@@ -31,43 +30,11 @@ import { parseWhitelistShow } from "../internal/parsers/dos/whitelist-show.js";
 import { parseBlacklistShow } from "../internal/parsers/dos/blacklist-show.js";
 import { parseConfigure } from "../internal/parsers/dos/configure.js";
 import type { RawCommandOutput } from "../internal/parsers/dos/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertNonEmptyToken(value: string, label: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${label} must not be empty or whitespace-only.`);
-  }
-  if (/\s/.test(value)) {
-    throw new Error(`${label} must not contain whitespace.`);
-  }
-}
-
-function assertArgsShape(args: readonly string[], label: string): void {
-  if (args.length === 0) {
-    throw new Error(`${label} requires at least one argument token.`);
-  }
-  for (const [index, token] of args.entries()) {
-    assertNonEmptyToken(token, `${label} argument #${String(index + 1)}`);
-  }
-}
-
-function assertKnownFlags(
-  args: readonly string[],
-  allowedFlags: readonly string[],
-  label: string,
-): void {
-  for (const token of args) {
-    if (token.startsWith("-") && !allowedFlags.includes(token)) {
-      throw new Error(
-        `${label} flag "${token}" is not one of the documented flags: ${allowedFlags.join(", ")}.`,
-      );
-    }
-  }
-}
+import {
+  firstExchangeText,
+  assertArgsShape,
+  assertKnownFlags,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.dos.v -- `dos -V` (rawLine 812) -- read

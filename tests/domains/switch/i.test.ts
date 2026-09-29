@@ -27,8 +27,8 @@ describe("cli.switch.i", () => {
     });
   });
 
-  it("links to the capability manifest as a read operation", () => {
-    expectManifestLinkage(switchI, "read");
+  it("links to the capability manifest as a write operation (traffic on/off)", () => {
+    expectManifestLinkage(switchI, "write");
   });
 
   it("round-trips through a fake transport and surfaces closed-session failure", async () => {

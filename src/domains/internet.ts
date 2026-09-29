@@ -18,58 +18,19 @@
  * `internal/parsers/internet/*.ts`.
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseView } from "../internal/parsers/internet/view.js";
 import { parseSet } from "../internal/parsers/internet/set.js";
 import type { RawCommandOutput } from "../internal/parsers/internet/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertNumberOneOf<T extends number>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly number[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => String(entry)).join(", ")} (got ${String(value)}).`,
-    );
-  }
-}
-
-const SINGLE_CLI_TOKEN_PATTERN = /^\S+$/;
-
-function assertSingleToken(value: string, name: string): void {
-  // Never interpolate `value` into the message — callers use this for
-  // password/username tokens; echoing rejected secrets would leak into Error.message.
-  if (!SINGLE_CLI_TOKEN_PATTERN.test(value)) {
-    throw new Error(`${name} must be a single non-empty token with no whitespace.`);
-  }
-}
-
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
-    );
-  }
-}
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertNumberOneOf,
+  assertOneOf,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.internet.v -- `internet -V` (rawLine 908) -- read
@@ -137,9 +98,9 @@ function buildSetFrames(input: InternetSetInput): readonly CommandFrame[] {
   parts.push(`-M ${String(input.mode)}`);
 
   if (input.ispName !== undefined) {
-    assertSingleToken(input.ispName, "ispName");
+    assertCliValue(input.ispName, "ispName");
     if (input.ispName.length > 23) {
-      throw new Error(
+      throw new InvalidInputError(
         `ispName must be at most 23 characters (got ${String(input.ispName.length)}).`,
       );
     }
@@ -152,9 +113,9 @@ function buildSetFrames(input: InternetSetInput): readonly CommandFrame[] {
   }
 
   if (input.username !== undefined) {
-    assertSingleToken(input.username, "username");
+    assertCliValue(input.username, "username");
     if (input.username.length > 49) {
-      throw new Error(
+      throw new InvalidInputError(
         `username must be at most 49 characters (got ${String(input.username.length)}).`,
       );
     }
@@ -162,9 +123,9 @@ function buildSetFrames(input: InternetSetInput): readonly CommandFrame[] {
   }
 
   if (input.password !== undefined) {
-    assertSingleToken(input.password, "password");
+    assertCliValue(input.password, "password");
     if (input.password.length > 49) {
-      throw new Error(
+      throw new InvalidInputError(
         `password must be at most 49 characters (got ${String(input.password.length)}).`,
       );
     }
@@ -184,27 +145,27 @@ function buildSetFrames(input: InternetSetInput): readonly CommandFrame[] {
   }
 
   if (input.pppoeClientIp !== undefined) {
-    assertSingleToken(input.pppoeClientIp, "pppoeClientIp");
+    assertCliValue(input.pppoeClientIp, "pppoeClientIp");
     parts.push(`-i ${input.pppoeClientIp}`);
   }
 
   if (input.wanIp !== undefined) {
-    assertSingleToken(input.wanIp, "wanIp");
+    assertCliValue(input.wanIp, "wanIp");
     parts.push(`-w ${input.wanIp}`);
   }
 
   if (input.wanNetmask !== undefined) {
-    assertSingleToken(input.wanNetmask, "wanNetmask");
+    assertCliValue(input.wanNetmask, "wanNetmask");
     parts.push(`-n ${input.wanNetmask}`);
   }
 
   if (input.gateway !== undefined) {
-    assertSingleToken(input.gateway, "gateway");
+    assertCliValue(input.gateway, "gateway");
     parts.push(`-g ${input.gateway}`);
   }
 
   if (input.serverIp !== undefined) {
-    assertSingleToken(input.serverIp, "serverIp");
+    assertCliValue(input.serverIp, "serverIp");
     parts.push(`-s ${input.serverIp}`);
   }
 

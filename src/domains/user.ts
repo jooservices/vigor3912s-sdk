@@ -23,16 +23,17 @@
  * (`ARCHITECTURE.md` Item 5's parser signature).
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseManage } from "../internal/parsers/user/manage.js";
 import type { RawCommandOutput } from "../internal/parsers/user/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
+import {
+  assertCliValue,
+  assertParamTail,
+  firstExchangeText,
+  type ParamTailGrammar,
+} from "../internal/domain-support.js";
 
 /**
  * `user set`/`user edit`/`user account` all take free-form flag/argument
@@ -40,20 +41,38 @@ function firstExchangeText(exchanges: readonly unknown[]): string {
  * this only rejects empty/whitespace-only and control-character input;
  * `frameSingleCommand` itself independently rejects shell metacharacters.
  */
-function assertSafeParam(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
-  }
+/** Documented flags per subcommand (rawLine 11800). */
+const USER_SET_FLAGS = ["-a", "-b", "-c", "-d", "-e", "-l", "-o", "-q", "-r", "-s", "-u"];
+const USER_EDIT_FLAGS = [
+  "-a",
+  "-d",
+  "-e",
+  "-f",
+  "-i",
+  "-o",
+  "-m",
+  "-n",
+  "-p",
+  "-q",
+  "-r",
+  "-s",
+  "-t",
+  "-u",
+  "-v",
+  "-w",
+  "-x",
+  "-A",
+  "-H",
+  "-T",
+  "-P",
+  "-l",
+  "-L",
+  "-D",
+];
+const USER_ACCOUNT_FLAGS = ["-t", "-d", "-q", "-r", "-w"];
 
-  if (/\p{Cc}/u.test(value)) {
-    throw new Error(`${name} must not contain control characters.`);
-  }
-}
-
-function assertNonEmpty(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
-  }
+function flagGrammar(flags: readonly string[]): ParamTailGrammar {
+  return { flags, firstToken: flags };
 }
 
 // ---------------------------------------------------------------------------
@@ -70,24 +89,24 @@ export type UserManageInput =
 function buildManageFrames(input: UserManageInput): readonly CommandFrame[] {
   switch (input.action) {
     case "set": {
-      assertSafeParam(input.param, "param");
+      assertParamTail(input.param, "param", flagGrammar(USER_SET_FLAGS));
 
       return [frameSingleCommand(`user set ${input.param}`)];
     }
     case "edit": {
       if (!Number.isInteger(input.profileIdx) || input.profileIdx < 0) {
-        throw new Error(
+        throw new InvalidInputError(
           `profileIdx must be a non-negative integer (got ${String(input.profileIdx)}).`,
         );
       }
 
-      assertSafeParam(input.param, "param");
+      assertParamTail(input.param, "param", flagGrammar(USER_EDIT_FLAGS));
 
       return [frameSingleCommand(`user edit ${String(input.profileIdx)} ${input.param}`)];
     }
     case "account": {
-      assertNonEmpty(input.userName, "userName");
-      assertSafeParam(input.param, "param");
+      assertCliValue(input.userName, "userName");
+      assertParamTail(input.param, "param", flagGrammar(USER_ACCOUNT_FLAGS));
 
       return [frameSingleCommand(`user account ${input.userName} ${input.param}`)];
     }

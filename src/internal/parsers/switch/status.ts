@@ -9,14 +9,15 @@
  */
 
 export interface SwitchStatusReport {
-  readonly autoDiscoveryEnabled: boolean;
-  readonly noRespondToExternalDeviceEnabled: boolean;
-  readonly displaySyslogEnabled: boolean;
+  /** Each flag is `null` when its line is missing from the output. */
+  readonly autoDiscoveryEnabled: boolean | null;
+  readonly noRespondToExternalDeviceEnabled: boolean | null;
+  readonly displaySyslogEnabled: boolean | null;
 }
 
 const LINE_PATTERN = /^(.*?)\s*:\s*(Enable|Disable)\s*$/;
 
-function findFlag(text: string, label: string): boolean | undefined {
+function findFlag(text: string, label: string): boolean | null {
   for (const rawLine of text.split(/\r?\n/)) {
     const match = LINE_PATTERN.exec(rawLine.trim());
 
@@ -31,13 +32,13 @@ function findFlag(text: string, label: string): boolean | undefined {
     }
   }
 
-  return undefined;
+  return null;
 }
 
 export function parseSwitchStatus(text: string): SwitchStatusReport {
   return {
-    autoDiscoveryEnabled: findFlag(text, "external device auto discovery status") ?? false,
-    noRespondToExternalDeviceEnabled: findFlag(text, "no respond to external device") ?? false,
-    displaySyslogEnabled: findFlag(text, "display external device syslog") ?? false,
+    autoDiscoveryEnabled: findFlag(text, "external device auto discovery status"),
+    noRespondToExternalDeviceEnabled: findFlag(text, "no respond to external device"),
+    displaySyslogEnabled: findFlag(text, "display external device syslog"),
   };
 }

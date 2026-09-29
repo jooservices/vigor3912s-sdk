@@ -33,7 +33,7 @@ describe("sys domainname <wan1/wan2> <suffix|clear>", () => {
       /at most 39 characters/,
     );
     expect(() => operation.buildFrames({ wan: "wan1", value: "a;rm-rf" })).toThrow(
-      /disallowed sequence/,
+      /shell metacharacters/,
     );
   });
 

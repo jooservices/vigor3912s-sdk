@@ -37,8 +37,8 @@
  * `resolveLimits`).
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseAddr } from "../internal/parsers/ip/addr.js";
 import { parseArp } from "../internal/parsers/ip/arp.js";
@@ -92,111 +92,49 @@ import { parseSession } from "../internal/parsers/ip/session.js";
 import { parseSpoofdef } from "../internal/parsers/ip/spoofdef.js";
 import { parseTracert, type IpTracertReport } from "../internal/parsers/ip/tracert.js";
 import { parseWanrip } from "../internal/parsers/ip/wanrip.js";
-import type { RawCommandOutput } from "../internal/parsers/ip/shared.js";
+import { parseRawText, type RawCommandOutput } from "../internal/parsers/ip/shared.js";
+import {
+  assertArgsShape,
+  assertCliValue,
+  assertInteger,
+  assertIntegerInRange,
+  assertIpv4,
+  assertKnownFlags,
+  assertMac,
+  assertMaxLength,
+  assertNonNegativeInteger,
+  assertNumberOneOf,
+  assertOneOf,
+  assertPositiveInteger,
+  assertTrailingText,
+  assertTupleLength,
+  defineCommandOperation,
+  defineRawOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
+function ipv4ToNumber(value: string): number {
+  return value.split(".").reduce((total, octet) => total * 256 + Number(octet), 0);
 }
 
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
+/** A valid IPv4 netmask: contiguous leading one-bits (e.g. 255.255.255.0). */
+function assertNetmask(value: string, name: string): void {
+  assertIpv4(value, name);
 
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
+  const inverted = 0xffffffff - ipv4ToNumber(value);
 
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-const IPV4_PATTERN = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-
-function assertIpv4(value: string, name: string): void {
-  if (!IPV4_PATTERN.test(value)) {
-    throw new Error(`${name} must be a valid IPv4 address (got "${value}").`);
-  }
-}
-
-const MAC_PATTERN = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
-
-function assertMac(value: string, name: string): void {
-  if (!MAC_PATTERN.test(value)) {
-    throw new Error(`${name} must be a colon-separated MAC address (got "${value}").`);
+  if ((inverted & (inverted + 1)) !== 0) {
+    throw new InvalidInputError(`${name} must be a contiguous netmask (got "${value}").`);
   }
 }
 
-function assertNonEmpty(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
-  }
-}
+function assertIpv4Range(start: string, end: string, startName: string, endName: string): void {
+  assertIpv4(start, startName);
+  assertIpv4(end, endName);
 
-/**
- * Generic runtime membership check for narrow string-literal-union inputs
- * (mirrors `wan.ts`'s identical helper -- kept per-family, not extracted to
- * a shared module, per `internal/parsers/wan/shared.ts`'s own precedent of
- * per-family self-containment).
- */
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
-    );
-  }
-}
-
-function assertOneOfNumbers(value: number, allowed: readonly number[], name: string): void {
-  if (!allowed.includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => String(entry)).join(", ")} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertNonEmptyToken(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty or whitespace-only.`);
-  }
-
-  if (/\s/.test(value)) {
-    throw new Error(`${name} must not contain whitespace.`);
-  }
-}
-
-function assertArgsShape(args: readonly string[], label: string): void {
-  if (args.length === 0) {
-    throw new Error(`${label} requires at least one argument token.`);
-  }
-
-  for (const [index, token] of args.entries()) {
-    assertNonEmptyToken(token, `${label} argument #${String(index + 1)}`);
-  }
-}
-
-function assertKnownFlags(
-  args: readonly string[],
-  allowedFlags: readonly string[],
-  label: string,
-): void {
-  for (const token of args) {
-    if (token.startsWith("-") && !allowedFlags.includes(token)) {
-      throw new Error(
-        `${label} flag "${token}" is not one of the documented flags: ${allowedFlags.join(", ")}.`,
-      );
-    }
-  }
-}
-
-function assertMaxLength(value: string, max: number, name: string): void {
-  if (value.length > max) {
-    throw new Error(
-      `${name} must be at most ${String(max)} characters (got ${String(value.length)}).`,
+  if (ipv4ToNumber(start) > ipv4ToNumber(end)) {
+    throw new InvalidInputError(
+      `${startName} must not be greater than ${endName} (got ${start}-${end}).`,
     );
   }
 }
@@ -353,18 +291,18 @@ export const ipNmask: TypedOperation<IpNmaskInput, RawCommandOutput> = {
 //
 // Sibling-live-verified correction (root audit, 2026-09-13,
 // `ARCHITECTURE.md`'s "sibling-live-verified" amendment): the manifest entry
-// `cli.ip.arp` (one entry per heading, not split -- unlike `sys cfg`/
-// `mngt rmtcfg`/`linux`) is now classified `"read"` from
-// `vigor3912s-mcp`'s live-verified fw 4.4.7_RC2 registry (`ip_arp_status`),
-// which corrected the prior `command-map-family` `"write"` classification.
-// The heading's other, genuinely mutating sub-forms (`add`/`del`/`flush`/
-// `accept <value>`/`setCacheLife`) are real write actions on this same
-// "ip arp" family -- narrowed out of this operation rather than kept under a
-// now-`"read"` classification (a `TypedOperation`'s own `classification`
-// must honestly describe what it does). Exposing them would need either a
-// `cli.ip.arp` classification of `"write"` (contradicting the live-verified
-// evidence) or a future per-subcommand manifest split -- a deliberate YAGNI
-// deferral, not an oversight.
+// `cli.ip.arp` is classified `"read"` from `vigor3912s-mcp`'s live-verified
+// fw 4.4.7_RC2 registry (`ip_arp_status`), which corrected the prior
+// `command-map-family` `"write"` classification.
+//
+// S2 (`IMPLEMENTATION.md`, `BACKLOG.md` "Tracked follow-up" 2026-09-13): the
+// heading's genuinely mutating sub-forms (`add`/`del`/`flush`) now have
+// their own accurately classified manifest entries below
+// (`cli.ip.arp.add`/`.del`/`.flush`, via `SPLIT_FAMILIES` in
+// `tools/generate-capability-manifest.ts`, same split mechanism as `sys
+// cfg`/`mngt rmtcfg`/`linux`) instead of remaining permanently
+// unrepresented. `accept <value>`/`setCacheLife` stay a deliberate YAGNI
+// deferral (not named in this task's scope).
 // ---------------------------------------------------------------------------
 
 export type IpArpInput = { readonly action: "status" } | { readonly action: "acceptStatus" };
@@ -388,10 +326,102 @@ export const ipArp: TypedOperation<IpArpInput, RawCommandOutput> = {
 };
 
 // ---------------------------------------------------------------------------
-// cli.ip.dhcpc -- canonical `status` / `release` / `renew` / `option -e ...
-// -w ... -c ... -v ...` variants (rawLine 1145); the heading's `-l`/`-h`/
-// `-d`/`-u`/`-x`/`-a`/`-r` option sub-forms and multi-WAN slash notation
-// (e.g. `-w 1/2`) are a deliberate YAGNI deferral.
+// cli.ip.arp.add / .del / .flush -- `ip arp add <IP> <MAC> <LAN or WAN>`,
+// `ip arp del <IP><LAN or WAN>`, `ip arp flush` (rawLine 1094-1096).
+// ---------------------------------------------------------------------------
+
+const ARP_DIRECTIONS = ["LAN", "WAN"] as const;
+
+export interface IpArpAddInput {
+  readonly ipv4Address: string;
+  readonly mac: string;
+  readonly direction: (typeof ARP_DIRECTIONS)[number];
+}
+
+export const ipArpAdd: TypedOperation<IpArpAddInput, RawCommandOutput> = {
+  manifestId: "cli.ip.arp.add",
+  classification: "write",
+  buildFrames: (input) => {
+    assertIpv4(input.ipv4Address, "ipv4Address");
+    assertMac(input.mac, "mac");
+    assertOneOf(input.direction, ARP_DIRECTIONS, "direction");
+
+    return [frameSingleCommand(`ip arp add ${input.ipv4Address} ${input.mac} ${input.direction}`)];
+  },
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+export interface IpArpDelInput {
+  readonly ipv4Address: string;
+  readonly direction: (typeof ARP_DIRECTIONS)[number];
+}
+
+export const ipArpDel: TypedOperation<IpArpDelInput, RawCommandOutput> = {
+  manifestId: "cli.ip.arp.del",
+  classification: "write",
+  buildFrames: (input) => {
+    assertIpv4(input.ipv4Address, "ipv4Address");
+    assertOneOf(input.direction, ARP_DIRECTIONS, "direction");
+
+    return [frameSingleCommand(`ip arp del ${input.ipv4Address} ${input.direction}`)];
+  },
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+export const ipArpFlush: TypedOperation<void, RawCommandOutput> = {
+  manifestId: "cli.ip.arp.flush",
+  classification: "write",
+  buildFrames: () => [frameSingleCommand("ip arp flush")],
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+// cli.ip.arp.accept -- `ip arp accept <0..7>` (rawLine 1098): accept/reject
+// illegal source/destination MAC and VRRP MAC (the `status` form is the read
+// `cli.ip.arp` `acceptStatus` action).
+export interface IpArpAcceptInput {
+  readonly mode: number;
+}
+
+export const ipArpAccept: TypedOperation<IpArpAcceptInput, RawCommandOutput> = {
+  manifestId: "cli.ip.arp.accept",
+  classification: "write",
+  buildFrames: (input) => {
+    assertIntegerInRange(input.mode, 0, 7, "mode");
+
+    return [frameSingleCommand(`ip arp accept ${String(input.mode)}`)];
+  },
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+// cli.ip.arp.setcachelife -- `ip arp setCacheLife <time>` (rawLine 1099):
+// "Available settings will be 10, 20, 30,....2550 seconds".
+export interface IpArpSetCacheLifeInput {
+  readonly seconds: number;
+}
+
+export const ipArpSetCacheLife: TypedOperation<IpArpSetCacheLifeInput, RawCommandOutput> = {
+  manifestId: "cli.ip.arp.setcachelife",
+  classification: "write",
+  buildFrames: (input) => {
+    assertIntegerInRange(input.seconds, 10, 2550, "seconds");
+
+    if (input.seconds % 10 !== 0) {
+      throw new InvalidInputError(
+        `seconds must be a multiple of 10 (got ${String(input.seconds)}).`,
+      );
+    }
+
+    return [frameSingleCommand(`ip arp setCacheLife ${String(input.seconds)}`)];
+  },
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+// ---------------------------------------------------------------------------
+// cli.ip.dhcpc -- `status` / `release` / `renew` and the custom DHCP client
+// `option` forms (rawLine 1145): bare `option`, `-h`, `-l` (list), `-d
+// <idx>` (delete), `-u <idx>` (update), `-r` (remove all, from the
+// parameter table) and `-e -w -c` with the value given as a string (`-v`),
+// raw hex bytes (`-x`) or an address list (`-a`).
 // ---------------------------------------------------------------------------
 
 export type IpDhcpcInput =
@@ -404,7 +434,20 @@ export type IpDhcpcInput =
       readonly wanNumber: number;
       readonly optionNumber: number;
       readonly value: string;
-    };
+      /** How `value` is encoded: string (`-v`, default), raw hex (`-x`), address list (`-a`). */
+      readonly valueType?: "string" | "hex" | "address";
+    }
+  | { readonly action: "option" | "optionHelp" | "optionList" | "optionRemoveAll" }
+  | { readonly action: "optionDelete" | "optionUpdate"; readonly index: number };
+
+const DHCPC_OPTION_FLAG = {
+  option: "",
+  optionHelp: " -h",
+  optionList: " -l",
+  optionRemoveAll: " -r",
+} as const;
+
+const DHCPC_VALUE_FLAG = { string: "-v", hex: "-x", address: "-a" } as const;
 
 function buildDhcpcFrames(input: IpDhcpcInput): readonly CommandFrame[] {
   switch (input.action) {
@@ -424,14 +467,31 @@ function buildDhcpcFrames(input: IpDhcpcInput): readonly CommandFrame[] {
     case "setOption": {
       assertIntegerInRange(input.wanNumber, 1, 12, "wanNumber");
       assertIntegerInRange(input.optionNumber, 0, 255, "optionNumber");
-      assertNonEmpty(input.value, "value");
+      assertCliValue(input.value, "value");
+
+      const valueType = input.valueType ?? "string";
+      assertOneOf(valueType, ["string", "hex", "address"], "valueType");
 
       return [
         frameSingleCommand(
-          `ip dhcpc option -e ${input.enabled ? "1" : "0"} -w ${String(input.wanNumber)} -c ${String(input.optionNumber)} -v ${input.value}`,
+          `ip dhcpc option -e ${input.enabled ? "1" : "0"} -w ${String(input.wanNumber)} -c ${String(input.optionNumber)} ${DHCPC_VALUE_FLAG[valueType]} ${input.value}`,
         ),
       ];
     }
+    case "option":
+    case "optionHelp":
+    case "optionList":
+    case "optionRemoveAll":
+      return [frameSingleCommand(`ip dhcpc option${DHCPC_OPTION_FLAG[input.action]}`)];
+    case "optionDelete":
+    case "optionUpdate":
+      assertPositiveInteger(input.index, "index");
+
+      return [
+        frameSingleCommand(
+          `ip dhcpc option ${input.action === "optionDelete" ? "-d" : "-u"} ${String(input.index)}`,
+        ),
+      ];
   }
 }
 
@@ -444,14 +504,15 @@ export const ipDhcpc: TypedOperation<IpDhcpcInput, RawCommandOutput> = {
 
 // ---------------------------------------------------------------------------
 // cli.ip.ping -- `ip ping <IP address> <AUTO/WAN1/WAN2>` (rawLine 1205) --
-// read; 60s `executionOverride` diagnostic exception (`ARCH#Item-3`). The
-// heading's trailing `<Source IP Address>` sub-form is a deliberate YAGNI
-// deferral (not shown in the heading's own worked example).
+// read; 60s `executionOverride` diagnostic exception (`ARCH#Item-3`).
+// Optional trailing `<Source IP Address>` (requires `wanInterface`).
 // ---------------------------------------------------------------------------
 
 export interface IpPingInput {
   readonly targetIp: string;
   readonly wanInterface?: "AUTO" | "WAN1" | "WAN2";
+  /** Source IP for the ping; requires `wanInterface`. */
+  readonly sourceIp?: string;
 }
 
 function buildPingFrames(input: IpPingInput): readonly CommandFrame[] {
@@ -461,7 +522,18 @@ function buildPingFrames(input: IpPingInput): readonly CommandFrame[] {
     assertOneOf(input.wanInterface, ["AUTO", "WAN1", "WAN2"], "wanInterface");
   }
 
-  const suffix = input.wanInterface === undefined ? "" : ` ${input.wanInterface}`;
+  if (input.sourceIp !== undefined) {
+    if (input.wanInterface === undefined) {
+      throw new InvalidInputError("sourceIp requires wanInterface.");
+    }
+
+    assertIpv4(input.sourceIp, "sourceIp");
+  }
+
+  const suffix = [input.wanInterface, input.sourceIp]
+    .filter((part) => part !== undefined)
+    .map((part) => ` ${part}`)
+    .join("");
 
   return [frameSingleCommand(`ip ping ${input.targetIp}${suffix}`)];
 }
@@ -512,7 +584,9 @@ function buildTracertFrames(input: IpTracertInput): readonly CommandFrame[] {
     assertOneOf(input.protocol, ["Udp", "Icmp"], "protocol");
 
     if (input.wanInterface === undefined) {
-      throw new Error("protocol requires wanInterface to also be provided (documented order).");
+      throw new InvalidInputError(
+        "protocol requires wanInterface to also be provided (documented order).",
+      );
     }
   }
 
@@ -534,13 +608,14 @@ export const ipTracert: TypedOperation<IpTracertInput, IpTracertReport> = {
 // cli.ip.route -- `ip route status` (rawLine 1310) -- read-only query only.
 //
 // Sibling-live-verified correction (root audit, 2026-09-13): the manifest
-// entry `cli.ip.route` (whole-heading, not split) is now classified `"read"`
-// from `vigor3912s-mcp`'s live-verified `ip_route_status`, correcting the
-// prior `command-map-family` `"write"` classification. The heading's real
-// mutating sub-forms (`add`/`del`, plus the documented `cnc`/`tel`/`default`/
-// `clean` sub-forms) are genuine write actions on this same "ip route"
-// family -- narrowed out of this operation for the same reason as
-// `cli.ip.arp` above (a deliberate YAGNI deferral, not an oversight).
+// entry `cli.ip.route` is now classified `"read"` from `vigor3912s-mcp`'s
+// live-verified `ip_route_status`, correcting the prior `command-map-family`
+// `"write"` classification.
+//
+// S2 (`IMPLEMENTATION.md`, `BACKLOG.md` "Tracked follow-up" 2026-09-13): the
+// heading's `add`/`del`/`default`/`clean` write sub-forms now have their own
+// accurately classified manifest entries below, via `SPLIT_FAMILIES`. `cnc`/
+// `tel` stay a deliberate YAGNI deferral (not named in this task's scope).
 // ---------------------------------------------------------------------------
 
 function buildRouteFrames(): readonly CommandFrame[] {
@@ -555,18 +630,116 @@ export const ipRoute: TypedOperation<void, RawCommandOutput> = {
 };
 
 // ---------------------------------------------------------------------------
+// cli.ip.route.add -- `ip route add <dst> <netmask> <gateway> <ifno>
+// <rtype>` (rawLine 1313). `ifno` is the documented "3=WAN1 .. 12=WAN10"
+// connection-interface index.
+// ---------------------------------------------------------------------------
+
+const ROUTE_TYPES = ["default", "static"] as const;
+
+export interface IpRouteAddInput {
+  readonly dst: string;
+  readonly netmask: string;
+  readonly gateway: string;
+  readonly ifno: number;
+  readonly rtype: (typeof ROUTE_TYPES)[number];
+}
+
+export const ipRouteAdd: TypedOperation<IpRouteAddInput, RawCommandOutput> = {
+  manifestId: "cli.ip.route.add",
+  classification: "write",
+  buildFrames: (input) => {
+    assertIpv4(input.dst, "dst");
+    assertNetmask(input.netmask, "netmask");
+    assertIpv4(input.gateway, "gateway");
+    assertIntegerInRange(input.ifno, 3, 12, "ifno");
+    assertOneOf(input.rtype, ROUTE_TYPES, "rtype");
+
+    return [
+      frameSingleCommand(
+        `ip route add ${input.dst} ${input.netmask} ${input.gateway} ${String(input.ifno)} ${input.rtype}`,
+      ),
+    ];
+  },
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+// cli.ip.route.del -- `ip route del <dst> <netmask><rtype>` (rawLine 1314).
+export interface IpRouteDelInput {
+  readonly dst: string;
+  readonly netmask: string;
+  readonly rtype: (typeof ROUTE_TYPES)[number];
+}
+
+export const ipRouteDel: TypedOperation<IpRouteDelInput, RawCommandOutput> = {
+  manifestId: "cli.ip.route.del",
+  classification: "write",
+  buildFrames: (input) => {
+    assertIpv4(input.dst, "dst");
+    assertNetmask(input.netmask, "netmask");
+    assertOneOf(input.rtype, ROUTE_TYPES, "rtype");
+
+    return [frameSingleCommand(`ip route del ${input.dst} ${input.netmask} ${input.rtype}`)];
+  },
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+// cli.ip.route.cnc / .tel -- `ip route cnc|tel` (rawLine 1316/1317): display
+// the CNC / China Telecom network IP ranges (read).
+export const ipRouteCnc: TypedOperation<void, RawCommandOutput> = {
+  manifestId: "cli.ip.route.cnc",
+  classification: "read",
+  buildFrames: () => [frameSingleCommand("ip route cnc")],
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+export const ipRouteTel: TypedOperation<void, RawCommandOutput> = {
+  manifestId: "cli.ip.route.tel",
+  classification: "read",
+  buildFrames: () => [frameSingleCommand("ip route tel")],
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+// cli.ip.route.default -- `ip route default <add/del/off/?>` (rawLine 1318).
+// Destructive: `del`/`off` remove the default route and cut WAN reachability,
+// including the management session. `?` is the generic help query.
+const ROUTE_DEFAULT_MODES = ["add", "del", "off"] as const;
+
+export interface IpRouteDefaultInput {
+  readonly mode: (typeof ROUTE_DEFAULT_MODES)[number];
+}
+
+export const ipRouteDefault: TypedOperation<IpRouteDefaultInput, RawCommandOutput> = {
+  manifestId: "cli.ip.route.default",
+  classification: "destructive",
+  buildFrames: (input) => {
+    assertOneOf(input.mode, ROUTE_DEFAULT_MODES, "mode");
+
+    return [frameSingleCommand(`ip route default ${input.mode}`)];
+  },
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+// cli.ip.route.clean -- `ip route clean <1/0>` (rawLine 1319). Destructive:
+// the manual documents it as "Clean all of the route settings".
+export interface IpRouteCleanInput {
+  readonly enabled: boolean;
+}
+
+export const ipRouteClean: TypedOperation<IpRouteCleanInput, RawCommandOutput> = {
+  manifestId: "cli.ip.route.clean",
+  classification: "destructive",
+  buildFrames: (input) => [frameSingleCommand(`ip route clean ${input.enabled ? "1" : "0"}`)],
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+// ---------------------------------------------------------------------------
 // cli.ip.session -- `ip session status` / `ip session show` (rawLine 1442) --
-// read-only query variants only.
-//
-// Sibling-live-verified correction (root audit, 2026-09-13): the manifest
-// entry `cli.ip.session` (whole-heading, not split) is now classified
-// `"read"` from `vigor3912s-mcp`'s live-verified `ip_session`, correcting the
-// prior `command-map-family` `"write"` classification. The heading's real
-// mutating sub-forms (`on`/`off`, `default <num>`, `timer <num>`,
-// `<block/unblock> <IP>`, `<add/del> <IP1-IP2> <num> <p2pnum>`,
-// `defaultp2p`) are genuine write actions on this same "ip session" family
-// -- narrowed out of this operation for the same reason as `cli.ip.arp`
-// above (a deliberate YAGNI deferral, not an oversight).
+// read-only query variants. Classified `"read"` from `vigor3912s-mcp`'s
+// live-verified `ip_session` (sibling-live-verified correction, 2026-09-13).
+// Every other documented sub-form has its own manifest entry below (split
+// via `SPLIT_FAMILIES`), plus the live-only bare `ip session`
+// (`cli.ip.session.list`, live-firmware-recon).
 // ---------------------------------------------------------------------------
 
 export type IpSessionInput = { readonly action: "status" } | { readonly action: "show" };
@@ -588,6 +761,120 @@ export const ipSession: TypedOperation<IpSessionInput, RawCommandOutput> = {
   buildFrames: buildSessionFrames,
   parse: (exchanges) => parseSession(firstExchangeText(exchanges)),
 };
+
+// cli.ip.session.list -- bare `ip session` (live-firmware-recon; not in the
+// Part VIII PDF). Output shape not captured -> raw text.
+export const ipSessionList: TypedOperation<void, RawCommandOutput> = {
+  manifestId: "cli.ip.session.list",
+  classification: "read",
+  buildFrames: () => [frameSingleCommand("ip session")],
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+// cli.ip.session.on / .off -- `ip session on|off` (rawLine 1446/1447):
+// turn the per-IP session limit on/off.
+export const ipSessionOn: TypedOperation<void, RawCommandOutput> = {
+  manifestId: "cli.ip.session.on",
+  classification: "write",
+  buildFrames: () => [frameSingleCommand("ip session on")],
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+export const ipSessionOff: TypedOperation<void, RawCommandOutput> = {
+  manifestId: "cli.ip.session.off",
+  classification: "write",
+  buildFrames: () => [frameSingleCommand("ip session off")],
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
+
+// cli.ip.session.default / .defaultp2p / .timer -- `ip session
+// default|defaultp2p|timer <num>` (rawLine 1448/1449/1452): default session
+// limit, default P2P session limit, block timer (seconds).
+export interface IpSessionNumberInput {
+  readonly value: number;
+}
+
+function sessionNumberOperation(
+  manifestId: string,
+  keyword: "default" | "defaultp2p" | "timer",
+): TypedOperation<IpSessionNumberInput, RawCommandOutput> {
+  return {
+    manifestId,
+    classification: "write",
+    buildFrames: (input) => {
+      assertNonNegativeInteger(input.value, "value");
+
+      return [frameSingleCommand(`ip session ${keyword} ${String(input.value)}`)];
+    },
+    parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+  };
+}
+
+export const ipSessionDefault = sessionNumberOperation("cli.ip.session.default", "default");
+export const ipSessionDefaultP2p = sessionNumberOperation(
+  "cli.ip.session.defaultp2p",
+  "defaultp2p",
+);
+export const ipSessionTimer = sessionNumberOperation("cli.ip.session.timer", "timer");
+
+// cli.ip.session.block / .unblock -- `ip session <block/unblock><IP>`
+// (rawLine 1453): block/unblock Internet access for one IP.
+export interface IpSessionHostInput {
+  readonly ipv4Address: string;
+}
+
+function sessionHostOperation(
+  manifestId: string,
+  keyword: "block" | "unblock",
+): TypedOperation<IpSessionHostInput, RawCommandOutput> {
+  return {
+    manifestId,
+    classification: "write",
+    buildFrames: (input) => {
+      assertIpv4(input.ipv4Address, "ipv4Address");
+
+      return [frameSingleCommand(`ip session ${keyword} ${input.ipv4Address}`)];
+    },
+    parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+  };
+}
+
+export const ipSessionBlock = sessionHostOperation("cli.ip.session.block", "block");
+export const ipSessionUnblock = sessionHostOperation("cli.ip.session.unblock", "unblock");
+
+// cli.ip.session.add / .del -- `ip session <add/del><IP1-IP2> <num>
+// <p2pnum>` (rawLine 1454): add/delete a session limit for an IP range.
+export interface IpSessionRangeInput {
+  readonly ip1: string;
+  readonly ip2: string;
+  readonly num: number;
+  readonly p2pNum: number;
+}
+
+function sessionRangeOperation(
+  manifestId: string,
+  keyword: "add" | "del",
+): TypedOperation<IpSessionRangeInput, RawCommandOutput> {
+  return {
+    manifestId,
+    classification: "write",
+    buildFrames: (input) => {
+      assertIpv4Range(input.ip1, input.ip2, "ip1", "ip2");
+      assertNonNegativeInteger(input.num, "num");
+      assertNonNegativeInteger(input.p2pNum, "p2pNum");
+
+      return [
+        frameSingleCommand(
+          `ip session ${keyword} ${input.ip1}-${input.ip2} ${String(input.num)} ${String(input.p2pNum)}`,
+        ),
+      ];
+    },
+    parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+  };
+}
+
+export const ipSessionAdd = sessionRangeOperation("cli.ip.session.add", "add");
+export const ipSessionDel = sessionRangeOperation("cli.ip.session.del", "del");
 
 // ---------------------------------------------------------------------------
 // cli.ip.bandwidth -- `ip bandwidth on/off` / `default <tx> <rx>` /
@@ -651,6 +938,8 @@ function buildBandwidthFrames(input: IpBandwidthInput): readonly CommandFrame[] 
       return [frameSingleCommand(`ip bandwidth routing ${input.enabled ? "on" : "off"}`)];
     }
     case "schedule": {
+      assertTupleLength(input.profiles, 4, "profiles");
+
       for (const profile of input.profiles) {
         assertIntegerInRange(profile, 1, 16, "each profile in profiles");
       }
@@ -731,7 +1020,7 @@ function buildBindmacFrames(input: IpBindmacInput): readonly CommandFrame[] {
     case "add": {
       assertIpv4(input.ipv4Address, "ipv4Address");
       assertMac(input.mac, "mac");
-      assertNonEmpty(input.comment, "comment");
+      assertTrailingText(input.comment, "comment");
 
       return [
         frameSingleCommand(`ip bindmac add ${input.ipv4Address} ${input.mac} ${input.comment}`),
@@ -783,7 +1072,7 @@ export interface IpRipInput {
 }
 
 function buildRipFrames(input: IpRipInput): readonly CommandFrame[] {
-  assertOneOfNumbers(input.mode, [0, 1, 2], "mode");
+  assertNumberOneOf(input.mode, [0, 1, 2], "mode");
 
   return [frameSingleCommand(`ip rip ${String(input.mode)}`)];
 }
@@ -864,7 +1153,9 @@ function buildIgmpProxyQueryFrames(input: IpIgmpProxyQueryInput): readonly Comma
   assertInteger(input.intervalMs, "intervalMs");
 
   if (input.intervalMs < 0) {
-    throw new Error(`intervalMs must not be negative (got ${String(input.intervalMs)}).`);
+    throw new InvalidInputError(
+      `intervalMs must not be negative (got ${String(input.intervalMs)}).`,
+    );
   }
 
   return [frameSingleCommand(`ip igmp_proxy query ${String(input.intervalMs)}`)];
@@ -895,10 +1186,15 @@ export const ipIgmpProxyPpp: TypedOperation<IpIgmpProxyPppInput, RawCommandOutpu
 const IGMP_PROXY_VERSIONS = ["v2", "v3", "auto", "show"] as const;
 
 export interface IpIgmpProxyVersionInput {
-  readonly version: (typeof IGMP_PROXY_VERSIONS)[number];
+  /** Omitted: bare `ip igmp_proxy version` (current setting). */
+  readonly version?: (typeof IGMP_PROXY_VERSIONS)[number];
 }
 
 function buildIgmpProxyVersionFrames(input: IpIgmpProxyVersionInput): readonly CommandFrame[] {
+  if (input.version === undefined) {
+    return [frameSingleCommand("ip igmp_proxy version")];
+  }
+
   assertOneOf(input.version, IGMP_PROXY_VERSIONS, "version");
 
   return [frameSingleCommand(`ip igmp_proxy version ${input.version}`)];
@@ -912,10 +1208,15 @@ export const ipIgmpProxyVersion: TypedOperation<IpIgmpProxyVersionInput, RawComm
 };
 
 export interface IpIgmpProxySyslogInput {
-  readonly enabled: boolean;
+  /** Omitted: bare `ip igmp_proxy syslog` (current setting). */
+  readonly enabled?: boolean;
 }
 
 function buildIgmpProxySyslogFrames(input: IpIgmpProxySyslogInput): readonly CommandFrame[] {
+  if (input.enabled === undefined) {
+    return [frameSingleCommand("ip igmp_proxy syslog")];
+  }
+
   return [frameSingleCommand(`ip igmp_proxy syslog ${input.enabled ? "1" : "0"}`)];
 }
 
@@ -1044,7 +1345,7 @@ export interface IpIgmpSnoopAcceptlistInput {
 function buildIgmpSnoopAcceptlistFrames(
   input: IpIgmpSnoopAcceptlistInput,
 ): readonly CommandFrame[] {
-  assertOneOfNumbers(input.type, [0, 1, 2], "type");
+  assertNumberOneOf(input.type, [0, 1, 2], "type");
 
   if (input.type === 0) {
     assertIntegerInRange(input.index, 0, 0, "index");
@@ -1194,9 +1495,9 @@ function buildBgpFrames(input: IpBgpInput): readonly CommandFrame[] {
     }
     case "neighborName": {
       assertBgpNeighborIdx(input.idx);
-      assertNonEmpty(input.name, "name");
+      assertCliValue(input.name, "name");
       assertMaxLength(input.name, 20, "name");
-      assertNonEmptyToken(input.name, "name");
+      assertCliValue(input.name, "name");
 
       return [frameSingleCommand(`ip bgp neighbor ${String(input.idx)} name ${input.name}`)];
     }
@@ -1239,9 +1540,9 @@ function buildBgpFrames(input: IpBgpInput): readonly CommandFrame[] {
     }
     case "neighborKey": {
       assertBgpNeighborIdx(input.idx);
-      assertNonEmpty(input.key, "key");
+      assertCliValue(input.key, "key");
       assertMaxLength(input.key, 20, "key");
-      assertNonEmptyToken(input.key, "key");
+      assertCliValue(input.key, "key");
 
       return [frameSingleCommand(`ip bgp neighbor ${String(input.idx)} key ${input.key}`)];
     }
@@ -1374,7 +1675,7 @@ function buildMaxnatuserFrames(input: IpMaxnatuserInput): readonly CommandFrame[
   assertInteger(input.userCount, "userCount");
 
   if (input.userCount < 0) {
-    throw new Error(`userCount must not be negative (got ${String(input.userCount)}).`);
+    throw new InvalidInputError(`userCount must not be negative (got ${String(input.userCount)}).`);
   }
 
   return [frameSingleCommand(`ip maxnatuser ${String(input.userCount)}`)];
@@ -1428,7 +1729,8 @@ export interface IpPolicyRtInput {
 
 function buildPolicyRtFrames(input: IpPolicyRtInput): readonly CommandFrame[] {
   assertArgsShape(input.args, "ip policy_rt args");
-  assertKnownFlags(input.args, POLICY_RT_FLAGS, "ip policy_rt");
+  // `diagnose` is the documented leading keyword (rawLine 1919).
+  assertKnownFlags(input.args, POLICY_RT_FLAGS, "ip policy_rt", ["diagnose"]);
 
   return [frameSingleCommand(`ip policy_rt ${input.args.join(" ")}`)];
 }
@@ -1494,6 +1796,26 @@ export const ipSpoofdef: TypedOperation<IpSpoofdefInput, RawCommandOutput> = {
   parse: (exchanges) => parseSpoofdef(firstExchangeText(exchanges)),
 };
 
+// ---------------------------------------------------------------------------
+// Live-firmware-recon operations (fw 4.4.7_RC2 `?` help, owner capture in
+// `references/live-help-fw-4.4.7_RC2.txt`); absent from the Part VIII PDF.
+// ---------------------------------------------------------------------------
+
+export interface IpIgmpFlInput {
+  readonly enabled: boolean;
+}
+
+export const ipIgmpFl = defineRawOperation<IpIgmpFlInput>(
+  "cli.ip.igmpfl",
+  "write",
+  (input) => `ip igmp_fl ${input.enabled ? "enable" : "disable"}`,
+);
+export const ipIgmpFlStatus = defineCommandOperation(
+  "cli.ip.igmpfl.status",
+  "read",
+  "ip igmp_fl status",
+);
+
 export const operations: readonly TypedOperation<never, unknown>[] = [
   ipPubsubnet,
   ipPubaddr,
@@ -1502,12 +1824,23 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   ipAddr,
   ipNmask,
   ipArp,
+  ipArpAdd,
+  ipArpDel,
+  ipArpFlush,
+  ipArpAccept,
+  ipArpSetCacheLife,
   ipDhcpc,
   ipPing,
   ipTracert,
   ipRip,
   ipWanrip,
   ipRoute,
+  ipRouteAdd,
+  ipRouteDel,
+  ipRouteCnc,
+  ipRouteTel,
+  ipRouteDefault,
+  ipRouteClean,
   ipIgmpProxyStatus,
   ipIgmpProxySet,
   ipIgmpProxyReset,
@@ -1527,6 +1860,16 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   ipIgmpSnoopPortchk,
   ipIgmpSnoopAcceptlist,
   ipSession,
+  ipSessionList,
+  ipSessionOn,
+  ipSessionOff,
+  ipSessionAdd,
+  ipSessionDel,
+  ipSessionDefault,
+  ipSessionDefaultP2p,
+  ipSessionTimer,
+  ipSessionBlock,
+  ipSessionUnblock,
   ipBandwidth,
   ipDataflowmonitorStatus,
   ipDataflowmonitorOn,
@@ -1547,4 +1890,6 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   ipLanDnsRes,
   ipDnsForward,
   ipSpoofdef,
+  ipIgmpFl,
+  ipIgmpFlStatus,
 ];
