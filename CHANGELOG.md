@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-29
+
 ### Added
 
 - `./schemas` export: JSON Schema (`inputSchemas`, `inputSchemaFor(manifestId)`,
@@ -112,6 +114,9 @@ l2lset/l2lDrop/dinset/option/trunk/sameSubnet`, `user set/edit/account`)
 
 - Generator split into `tools/manifest/*`; 152 duplicated domain validator
   copies replaced by `src/internal/domain-support.ts`.
+- Dev dependencies updated (`@types/node`, `eslint`, `prettier`, `vitest`,
+  `@vitest/coverage-v8`); `typescript` stays 6.0.x for `typescript-eslint`.
+  CodeQL actions pinned to v4.38.1.
 
 ## [1.0.0] - 2026-09-14
 

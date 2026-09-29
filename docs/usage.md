@@ -8,7 +8,7 @@ the package `exports` map.
 The package is **`"private": true`** (not on npm). Install from GitHub:
 
 ```bash
-npm install github:jooservices/vigor3912s-sdk#v1.0.0
+npm install github:jooservices/vigor3912s-sdk#v2.0.0
 ```
 
 This SDK does **not** open SSH sessions, read `.env` credentials, or connect to
