@@ -39,7 +39,7 @@ describe("cli.vigbrg.wanstatus -- vigbrg wanstatus (read)", () => {
 
   it("returns an empty table for text that doesn't match the documented shape", () => {
     expect(parseWanStatus("not a wanstatus block")).toEqual({
-      bridgeState: "",
+      bridgeState: null,
       entries: [],
     });
   });

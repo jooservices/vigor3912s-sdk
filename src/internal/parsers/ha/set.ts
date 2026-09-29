@@ -12,10 +12,8 @@
  * shortcut).
  */
 
-export interface HaSetAck {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseHaSet(text: string): HaSetAck {
-  return { raw: text.trim() };
-}
+export type HaSetAck = RawCommandOutput;
+
+export const parseHaSet: (text: string) => HaSetAck = parseRawText;

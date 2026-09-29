@@ -18,8 +18,8 @@
  * writes; consumers (`LiveReadOnlyClient`, MCP confirm gate, app policy) do.
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { SysAck } from "../internal/parsers/sys/ack.js";
 import { parseSysAlg } from "../internal/parsers/sys/alg.js";
 import { parseSysAutoreboot } from "../internal/parsers/sys/autoreboot.js";
@@ -61,6 +61,18 @@ import { parseSysInfo } from "../internal/parsers/sys/info.js";
 import { parseSysAppStatistic } from "../internal/parsers/sys/appstatistic.js";
 import { parseSysAppBandwidth } from "../internal/parsers/sys/appbandwidth.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
+import {
+  assertArgsShape,
+  assertCliValue,
+  assertIntegerInRange,
+  assertMaxLength,
+  assertNonEmptyToken,
+  assertOneOf,
+  assertPositiveInteger,
+  defineCommandOperation,
+  defineRawOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // Shared, local (non-shared-file) validation helpers.
@@ -74,43 +86,12 @@ import type { TypedOperation } from "../internal/registry/operation.js";
 // duplicated logic here.
 // ---------------------------------------------------------------------------
 
-function assertNonEmptyToken(value: string, label: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${label} must not be empty or whitespace-only.`);
-  }
-  if (/\s/.test(value)) {
-    throw new Error(`${label} must not contain whitespace.`);
-  }
-}
-
-function assertMaxLength(value: string, max: number, label: string): void {
-  if (value.length > max) {
-    throw new Error(
-      `${label} must be at most ${String(max)} characters (got ${String(value.length)}).`,
-    );
-  }
-}
-
 type WanSelector = "wan1" | "wan2";
 
 function assertWanSelector(value: string, label: string): asserts value is WanSelector {
   if (value !== "wan1" && value !== "wan2") {
-    throw new Error(`${label} must be "wan1" or "wan2" (got "${value}").`);
+    throw new InvalidInputError(`${label} must be "wan1" or "wan2" (got "${value}").`);
   }
-}
-
-function assertArgsShape(args: readonly string[], label: string): void {
-  if (args.length === 0) {
-    throw new Error(`${label} requires at least one argument token.`);
-  }
-  for (const [index, token] of args.entries()) {
-    assertNonEmptyToken(token, `${label} argument #${String(index + 1)}`);
-  }
-}
-
-function firstExchangeStdout(exchanges: readonly unknown[]): string {
-  const first = exchanges[0] as CommandExchange | undefined;
-  return first?.stdout ?? "";
 }
 
 // ---------------------------------------------------------------------------
@@ -121,35 +102,35 @@ const sysCfgStatus: TypedOperation<void, SysCfgStatus> = {
   manifestId: "cli.sys.cfg.status",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys cfg status")],
-  parse: (exchanges) => parseSysCfgStatus(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysCfgStatus(firstExchangeText(exchanges)),
 };
 
 const sysCmdlog: TypedOperation<void, SysCmdLog> = {
   manifestId: "cli.sys.cmdlog",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys cmdlog")],
-  parse: (exchanges) => parseSysCmdLog(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysCmdLog(firstExchangeText(exchanges)),
 };
 
 const sysCc: TypedOperation<void, SysCc> = {
   manifestId: "cli.sys.cc",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys cc")],
-  parse: (exchanges) => parseSysCc(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysCc(firstExchangeText(exchanges)),
 };
 
 const sysVersion: TypedOperation<void, SysVersion> = {
   manifestId: "cli.sys.version",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys version")],
-  parse: (exchanges) => parseSysVersion(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysVersion(firstExchangeText(exchanges)),
 };
 
 const sysQrybuf: TypedOperation<void, SysQryBuf> = {
   manifestId: "cli.sys.qrybuf",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys qrybuf")],
-  parse: (exchanges) => parseSysQryBuf(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysQryBuf(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -162,42 +143,42 @@ const sysPollbuf: TypedOperation<void, SysPollbuf> = {
   manifestId: "cli.sys.pollbuf",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys pollbuf")],
-  parse: (exchanges) => parseSysPollbuf(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysPollbuf(firstExchangeText(exchanges)),
 };
 
 const sysFrlog: TypedOperation<void, SysFrLog> = {
   manifestId: "cli.sys.frlog",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys fr_log")],
-  parse: (exchanges) => parseSysFrLog(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysFrLog(firstExchangeText(exchanges)),
 };
 
 const sysDnscachetbl: TypedOperation<void, SysDnsCacheTbl> = {
   manifestId: "cli.sys.dnscachetbl",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys dnsCacheTbl")],
-  parse: (exchanges) => parseSysDnsCacheTbl(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysDnsCacheTbl(firstExchangeText(exchanges)),
 };
 
 const sysTime: TypedOperation<void, SysTime> = {
   manifestId: "cli.sys.time",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys time")],
-  parse: (exchanges) => parseSysTime(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysTime(firstExchangeText(exchanges)),
 };
 
 const sysDashboard: TypedOperation<void, SysDashboard> = {
   manifestId: "cli.sys.dashboard",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys dashboard")],
-  parse: (exchanges) => parseSysDashboard(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysDashboard(firstExchangeText(exchanges)),
 };
 
 const sysMaxsession: TypedOperation<void, SysMaxSession> = {
   manifestId: "cli.sys.maxsession",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys max_session")],
-  parse: (exchanges) => parseSysMaxSession(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysMaxSession(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -231,7 +212,7 @@ export interface SysHealthInput {
 
 function assertSysHealthMetric(metric: string): asserts metric is SysHealthMetric {
   if (!(SYS_HEALTH_METRICS as readonly string[]).includes(metric)) {
-    throw new Error(
+    throw new InvalidInputError(
       `sys health metric must be one of ${SYS_HEALTH_METRICS.join(", ")} (got "${metric}").`,
     );
   }
@@ -244,7 +225,7 @@ const sysHealth: TypedOperation<SysHealthInput, SysHealth> = {
     assertSysHealthMetric(input.metric);
     return [frameSingleCommand(`sys health ${input.metric}`)];
   },
-  parse: (exchanges) => parseSysHealth(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysHealth(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -262,12 +243,12 @@ const sysDomainname: TypedOperation<SysDomainnameInput, SysAck> = {
   buildFrames: (input) => {
     assertWanSelector(input.wan, "sys domainname wan selector");
     if (input.value !== "clear") {
-      assertNonEmptyToken(input.value, "sys domainname suffix");
+      assertCliValue(input.value, "sys domainname suffix");
       assertMaxLength(input.value, 39, "sys domainname suffix");
     }
     return [frameSingleCommand(`sys domainname ${input.wan} ${input.value}`)];
   },
-  parse: (exchanges) => parseSysDomainname(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysDomainname(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -285,7 +266,7 @@ const sysName: TypedOperation<SysNameInput, SysAck> = {
   buildFrames: (input) => {
     assertWanSelector(input.wan, "sys name wan selector");
     if (input.value !== "clear") {
-      assertNonEmptyToken(input.value, "sys name value");
+      assertCliValue(input.value, "sys name value");
       // The documented body text allows up to 39 characters, but the
       // documented `sys name ?` interactive help text says 20; the smaller
       // bound is used defensively (rawLine 8001).
@@ -293,7 +274,7 @@ const sysName: TypedOperation<SysNameInput, SysAck> = {
     }
     return [frameSingleCommand(`sys name ${input.wan} ${input.value}`)];
   },
-  parse: (exchanges) => parseSysName(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysName(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -309,13 +290,13 @@ const sysPasswd: TypedOperation<SysPasswdInput, SysAck> = {
   manifestId: "cli.sys.passwd",
   classification: "write",
   buildFrames: (input) => {
-    assertNonEmptyToken(input.oldPassword, "sys passwd old password");
+    assertCliValue(input.oldPassword, "sys passwd old password");
     assertMaxLength(input.oldPassword, 83, "sys passwd old password");
-    assertNonEmptyToken(input.newPassword, "sys passwd new password");
+    assertCliValue(input.newPassword, "sys passwd new password");
     assertMaxLength(input.newPassword, 83, "sys passwd new password");
     return [frameSingleCommand(`sys passwd ${input.oldPassword} ${input.newPassword}`)];
   },
-  parse: (exchanges) => parseSysPasswd(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysPasswd(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -326,7 +307,7 @@ const sysReboot: TypedOperation<void, SysAck> = {
   manifestId: "cli.sys.reboot",
   classification: "destructive",
   buildFrames: () => [frameSingleCommand("sys reboot")],
-  parse: (exchanges) => parseSysReboot(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysReboot(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -340,7 +321,7 @@ function sysAutorebootCommandArg(input: SysAutorebootInput): string {
     return input;
   }
   if (!Number.isInteger(input.hours) || input.hours < 1) {
-    throw new Error(
+    throw new InvalidInputError(
       `sys autoreboot hours must be a positive integer (got ${String(input.hours)}).`,
     );
   }
@@ -351,7 +332,7 @@ const sysAutoreboot: TypedOperation<SysAutorebootInput, SysAck> = {
   manifestId: "cli.sys.autoreboot",
   classification: "write",
   buildFrames: (input) => [frameSingleCommand(`sys autoreboot ${sysAutorebootCommandArg(input)}`)],
-  parse: (exchanges) => parseSysAutoreboot(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysAutoreboot(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -362,7 +343,7 @@ const sysCommit: TypedOperation<void, SysAck> = {
   manifestId: "cli.sys.commit",
   classification: "write",
   buildFrames: () => [frameSingleCommand("sys commit")],
-  parse: (exchanges) => parseSysCommit(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysCommit(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -373,7 +354,7 @@ const sysTftpd: TypedOperation<void, SysAck> = {
   manifestId: "cli.sys.tftpd",
   classification: "write",
   buildFrames: () => [frameSingleCommand("sys tftpd")],
-  parse: (exchanges) => parseSysTftpd(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysTftpd(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -384,7 +365,7 @@ const sysCfgDefault: TypedOperation<void, SysAck> = {
   manifestId: "cli.sys.cfg.default",
   classification: "destructive",
   buildFrames: () => [frameSingleCommand("sys cfg default")],
-  parse: (exchanges) => parseSysCfgDefault(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysCfgDefault(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -418,13 +399,13 @@ const sysTr069: TypedOperation<SysTr069Input, SysAck> = {
     assertArgsShape(input.args, "sys tr069");
     const [subcommand] = input.args;
     if (!(SYS_TR069_SUBCOMMANDS as readonly string[]).includes(subcommand ?? "")) {
-      throw new Error(
+      throw new InvalidInputError(
         `sys tr069 subcommand must be one of ${SYS_TR069_SUBCOMMANDS.join(", ")} (got "${subcommand ?? ""}").`,
       );
     }
     return [frameSingleCommand(`sys tr069 ${input.args.join(" ")}`)];
   },
-  parse: (exchanges) => parseSysTr069(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysTr069(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -439,7 +420,7 @@ const sysAlg: TypedOperation<SysAlgInput, SysAck> = {
   manifestId: "cli.sys.alg",
   classification: "write",
   buildFrames: (input) => [frameSingleCommand(`sys alg -e ${input.enabled ? "1" : "0"}`)],
-  parse: (exchanges) => parseSysAlg(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysAlg(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -466,13 +447,13 @@ const sysLicense: TypedOperation<SysLicenseInput, SysAck> = {
     assertArgsShape(input.args, "sys license");
     const [subcommand] = input.args;
     if (!(SYS_LICENSE_SUBCOMMANDS as readonly string[]).includes(subcommand ?? "")) {
-      throw new Error(
+      throw new InvalidInputError(
         `sys license subcommand must be one of ${SYS_LICENSE_SUBCOMMANDS.join(", ")} (got "${subcommand ?? ""}").`,
       );
     }
     return [frameSingleCommand(`sys license ${input.args.join(" ")}`)];
   },
-  parse: (exchanges) => parseSysLicense(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysLicense(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -490,16 +471,16 @@ const sysSyslog: TypedOperation<SysSyslogInput, SysAck> = {
     assertArgsShape(input.args, "sys syslog");
     const [flag, value] = input.args;
     if (flag !== "-a") {
-      throw new Error(
+      throw new InvalidInputError(
         `sys syslog requires "-a <0/1>" as its first two arguments (got "${flag ?? ""}").`,
       );
     }
     if (value !== "0" && value !== "1") {
-      throw new Error(`sys syslog -a value must be "0" or "1" (got "${value ?? ""}").`);
+      throw new InvalidInputError(`sys syslog -a value must be "0" or "1" (got "${value ?? ""}").`);
     }
     return [frameSingleCommand(`sys syslog ${input.args.join(" ")}`)];
   },
-  parse: (exchanges) => parseSysSyslog(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysSyslog(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -520,13 +501,15 @@ const sysMailalert: TypedOperation<SysMailalertInput, SysAck> = {
       assertNonEmptyToken(token, `sys mailalert argument #${String(index + 1)}`);
     }
     if (input.args.length > 0 && !SYS_MAILALERT_FLAG_PATTERN.test(input.args[0] ?? "")) {
-      throw new Error(`sys mailalert's first argument must be a single-letter flag (e.g. "-e").`);
+      throw new InvalidInputError(
+        `sys mailalert's first argument must be a single-letter flag (e.g. "-e").`,
+      );
     }
     const command =
       input.args.length > 0 ? `sys mailalert ${input.args.join(" ")}` : "sys mailalert";
     return [frameSingleCommand(command)];
   },
-  parse: (exchanges) => parseSysMailalert(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysMailalert(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -546,13 +529,13 @@ const sysWebhook: TypedOperation<SysWebhookInput, SysAck> = {
     assertArgsShape(input.args, "sys webhook");
     const [subcommand] = input.args;
     if (!(SYS_WEBHOOK_SUBCOMMANDS as readonly string[]).includes(subcommand ?? "")) {
-      throw new Error(
+      throw new InvalidInputError(
         `sys webhook subcommand must be one of ${SYS_WEBHOOK_SUBCOMMANDS.join(", ")} (got "${subcommand ?? ""}").`,
       );
     }
     return [frameSingleCommand(`sys webhook ${input.args.join(" ")}`)];
   },
-  parse: (exchanges) => parseSysWebhook(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysWebhook(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -560,43 +543,64 @@ const sysWebhook: TypedOperation<SysWebhookInput, SysAck> = {
 // `export const operations: readonly TypedOperation<never, unknown>[]`.
 // ---------------------------------------------------------------------------
 
-function assertIntegerInRange(value: number, min: number, max: number, label: string): void {
-  if (!Number.isInteger(value) || value < min || value > max) {
-    throw new Error(
-      `${label} must be an integer between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
 function assertOneOfString<T extends string>(
   value: string,
   allowed: readonly T[],
   label: string,
 ): asserts value is T {
   if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(`${label} must be one of ${allowed.join(", ")} (got "${value}").`);
+    throw new InvalidInputError(`${label} must be one of ${allowed.join(", ")} (got "${value}").`);
   }
 }
 
 // ---------------------------------------------------------------------------
-// cli.sys.adminuser -- YAGNI: Local/LDAP/TACACS+/fallback toggles only
-// (edit/delete/view deferred).
+// cli.sys.adminuser -- `sys adminuser <option>` (rawLine 7784): Local / LDAP /
+// TACACS+ / fallback toggles, and `edit <INDEX> <username> <password>`,
+// `delete <INDEX>`, `view <INDEX>` for the eight local accounts. Classified
+// `write` as a whole (`view` prints the stored password -- treat it as
+// privileged, not as a routine read).
 // ---------------------------------------------------------------------------
 
-export type SysAdminuserInput = {
-  readonly target: "Local" | "LDAP" | "TACACS+" | "fallback";
-  readonly enabled: boolean;
-};
+export type SysAdminuserInput =
+  | {
+      readonly target: "Local" | "LDAP" | "TACACS+" | "fallback";
+      readonly enabled: boolean;
+    }
+  | {
+      readonly target: "edit";
+      readonly index: number;
+      readonly username: string;
+      readonly password: string;
+    }
+  | { readonly target: "delete" | "view"; readonly index: number };
 
 export const sysAdminuser: TypedOperation<SysAdminuserInput, SysAck> = {
   manifestId: "cli.sys.adminuser",
   classification: "write",
   buildFrames: (input) => {
-    assertOneOfString(input.target, ["Local", "LDAP", "TACACS+", "fallback"], "target");
+    switch (input.target) {
+      case "edit":
+        assertIntegerInRange(input.index, 1, 8, "index");
+        assertCliValue(input.username, "username");
+        assertCliValue(input.password, "password");
 
-    return [frameSingleCommand(`sys adminuser ${input.target} ${input.enabled ? "1" : "0"}`)];
+        return [
+          frameSingleCommand(
+            `sys adminuser edit ${String(input.index)} ${input.username} ${input.password}`,
+          ),
+        ];
+      case "delete":
+      case "view":
+        assertIntegerInRange(input.index, 1, 8, "index");
+
+        return [frameSingleCommand(`sys adminuser ${input.target} ${String(input.index)}`)];
+      default:
+        assertOneOfString(input.target, ["Local", "LDAP", "TACACS+", "fallback"], "target");
+
+        return [frameSingleCommand(`sys adminuser ${input.target} ${input.enabled ? "1" : "0"}`)];
+    }
   },
-  parse: (exchanges) => parseAdminuser(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseAdminuser(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -634,7 +638,7 @@ export const sysBoard: TypedOperation<SysBoardInput, SysAck> = {
         return [frameSingleCommand(`sys board usb ${input.port} ${input.enabled ? "on" : "off"}`)];
     }
   },
-  parse: (exchanges) => parseBoard(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseBoard(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -666,12 +670,12 @@ export const sysBonjour: TypedOperation<SysBonjourInput, SysAck> = {
     if (input.ipv6Enabled !== undefined) parts.push(`-6 ${input.ipv6Enabled ? "1" : "0"}`);
 
     if (parts.length === 1) {
-      throw new Error("At least one sys bonjour option must be provided.");
+      throw new InvalidInputError("At least one sys bonjour option must be provided.");
     }
 
     return [frameSingleCommand(parts.join(" "))];
   },
-  parse: (exchanges) => parseBonjour(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseBonjour(firstExchangeText(exchanges)),
 };
 
 export interface SysFtpdInput {
@@ -682,14 +686,14 @@ export const sysFtpd: TypedOperation<SysFtpdInput, SysAck> = {
   manifestId: "cli.sys.ftpd",
   classification: "write",
   buildFrames: (input) => [frameSingleCommand(`sys ftpd ${input.enabled ? "on" : "off"}`)],
-  parse: (exchanges) => parseFtpd(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseFtpd(firstExchangeText(exchanges)),
 };
 
 export const sysIface: TypedOperation<void, SysAck> = {
   manifestId: "cli.sys.iface",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys iface")],
-  parse: (exchanges) => parseIface(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseIface(firstExchangeText(exchanges)),
 };
 
 export interface SysSipAlgInput {
@@ -714,12 +718,12 @@ export const sysSipAlg: TypedOperation<SysSipAlgInput, SysAck> = {
     if (input.tcpPathEnabled !== undefined) parts.push(`-t ${input.tcpPathEnabled ? "1" : "0"}`);
 
     if (parts.length === 1) {
-      throw new Error("At least one sys sip_alg option must be provided.");
+      throw new InvalidInputError("At least one sys sip_alg option must be provided.");
     }
 
     return [frameSingleCommand(parts.join(" "))];
   },
-  parse: (exchanges) => parseSipAlg(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSipAlg(firstExchangeText(exchanges)),
 };
 
 export interface SysRtspAlgInput {
@@ -746,12 +750,12 @@ export const sysRtspAlg: TypedOperation<SysRtspAlgInput, SysAck> = {
     if (input.showPortmap === true) parts.push("-v");
 
     if (parts.length === 1) {
-      throw new Error("At least one sys rtsp_alg option must be provided.");
+      throw new InvalidInputError("At least one sys rtsp_alg option must be provided.");
     }
 
     return [frameSingleCommand(parts.join(" "))];
   },
-  parse: (exchanges) => parseRtspAlg(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseRtspAlg(firstExchangeText(exchanges)),
 };
 
 export interface SysArpAutoReqInput {
@@ -763,7 +767,7 @@ export const sysArpAutoReq: TypedOperation<SysArpAutoReqInput, SysAck> = {
   classification: "write",
   // Documented encoding: `-d 0` enables, `-d 1` disables.
   buildFrames: (input) => [frameSingleCommand(`sys arp_AutoReq -d ${input.enabled ? "0" : "1"}`)],
-  parse: (exchanges) => parseArpAutoReq(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseArpAutoReq(firstExchangeText(exchanges)),
 };
 
 export interface SysDaylightsaveInput {
@@ -783,12 +787,12 @@ export const sysDaylightsave: TypedOperation<SysDaylightsaveInput, SysAck> = {
     if (input.enabled !== undefined) parts.push(`-e ${input.enabled ? "1" : "0"}`);
 
     if (parts.length === 1) {
-      throw new Error("At least one sys daylightsave option must be provided.");
+      throw new InvalidInputError("At least one sys daylightsave option must be provided.");
     }
 
     return [frameSingleCommand(parts.join(" "))];
   },
-  parse: (exchanges) => parseDaylightsave(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseDaylightsave(firstExchangeText(exchanges)),
 };
 
 export interface SysEapTlsInput {
@@ -799,7 +803,7 @@ export const sysEapTls: TypedOperation<SysEapTlsInput, SysAck> = {
   manifestId: "cli.sys.eaptls",
   classification: "write",
   buildFrames: (input) => [frameSingleCommand(`sys eap_tls set ${input.enabled ? "1" : "0"}`)],
-  parse: (exchanges) => parseEapTls(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseEapTls(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -810,22 +814,220 @@ export const sysInfo: TypedOperation<void, SysAck> = {
   manifestId: "cli.sys.info",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys info")],
-  parse: (exchanges) => parseSysInfo(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysInfo(firstExchangeText(exchanges)),
 };
 
 export const sysAppStatistic: TypedOperation<void, SysAck> = {
   manifestId: "cli.sys.appstatistic",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys app_statistic")],
-  parse: (exchanges) => parseSysAppStatistic(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysAppStatistic(firstExchangeText(exchanges)),
 };
 
 export const sysAppBandwidth: TypedOperation<void, SysAck> = {
   manifestId: "cli.sys.appbandwidth",
   classification: "read",
   buildFrames: () => [frameSingleCommand("sys app_bandwidth")],
-  parse: (exchanges) => parseSysAppBandwidth(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSysAppBandwidth(firstExchangeText(exchanges)),
 };
+
+// ---------------------------------------------------------------------------
+// Sub-form completion (S8): documented forms of headings whose original
+// operation models only the live-verified bare query.
+// ---------------------------------------------------------------------------
+
+// `sys pollbuf on|off` (rawLine 8118).
+export const sysPollbufOn = defineCommandOperation("cli.sys.pollbuf.on", "write", "sys pollbuf on");
+export const sysPollbufOff = defineCommandOperation(
+  "cli.sys.pollbuf.off",
+  "write",
+  "sys pollbuf off",
+);
+
+// `sys time show|inquire|server|wan|zone|pseudo` (rawLine 8776).
+export const sysTimeShow = defineCommandOperation("cli.sys.time.show", "read", "sys time show");
+/** Triggers an immediate query to the configured time server. */
+export const sysTimeInquire = defineCommandOperation(
+  "cli.sys.time.inquire",
+  "write",
+  "sys time inquire",
+);
+
+export interface SysTimeServerInput {
+  /** Time server domain name (max 39 characters). */
+  readonly domain: string;
+}
+
+export const sysTimeServer = defineRawOperation<SysTimeServerInput>(
+  "cli.sys.time.server",
+  "write",
+  (input) => {
+    assertCliValue(input.domain, "domain");
+    assertMaxLength(input.domain, 39, "domain");
+    return `sys time server ${input.domain}`;
+  },
+);
+
+export interface SysTimeWanInput {
+  /** Interface sending the NTP request: 0 = Auto, 1..12 = WAN1..WAN12. */
+  readonly wan: number;
+}
+
+export const sysTimeWan = defineRawOperation<SysTimeWanInput>(
+  "cli.sys.time.wan",
+  "write",
+  (input) => {
+    assertIntegerInRange(input.wan, 0, 12, "wan");
+    return `sys time wan ${String(input.wan)}`;
+  },
+);
+
+export interface SysTimeZoneInput {
+  /** Documented time-zone index (1 = GMT-12:00 Eniwetok ... see the manual's table). */
+  readonly index: number;
+}
+
+export const sysTimeZone = defineRawOperation<SysTimeZoneInput>(
+  "cli.sys.time.zone",
+  "write",
+  (input) => {
+    assertPositiveInteger(input.index, "index");
+    return `sys time zone ${String(input.index)}`;
+  },
+);
+
+export const sysTimePseudo = defineCommandOperation(
+  "cli.sys.time.pseudo",
+  "write",
+  "sys time pseudo",
+);
+
+// `sys dashboard show` and `sys dashboard -<section> <1/0> ...` (rawLine 8916).
+export const sysDashboardShow = defineCommandOperation(
+  "cli.sys.dashboard.show",
+  "read",
+  "sys dashboard show",
+);
+
+const DASHBOARD_SECTIONS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a"] as const;
+
+export interface SysDashboardSetInput {
+  /**
+   * Sections to show/hide: 0 Front Panel, 1 System Information, 2 IPv4 LAN,
+   * 3 IPv4 Internet Access, 4 IPv6 Internet Access, 5 Interface, 6 Security,
+   * 7 System Resource, 8 LTE Status, 9 Quick Access, a VoIP.
+   */
+  readonly sections: readonly {
+    readonly section: (typeof DASHBOARD_SECTIONS)[number];
+    readonly enabled: boolean;
+  }[];
+}
+
+export const sysDashboardSet = defineRawOperation<SysDashboardSetInput>(
+  "cli.sys.dashboard.set",
+  "write",
+  (input) => {
+    if (input.sections.length === 0) {
+      throw new InvalidInputError("sections must contain at least one entry.");
+    }
+
+    const parts = input.sections.map(({ section, enabled }) => {
+      assertOneOf(section, DASHBOARD_SECTIONS, "section");
+      return `-${section} ${enabled ? "1" : "0"}`;
+    });
+
+    return `sys dashboard ${parts.join(" ")}`;
+  },
+);
+
+// `sys max_session <300K/500K/1000K>` (rawLine 8962); applied after reboot.
+const MAX_SESSION_VALUES = ["300K", "500K", "1000K"] as const;
+
+export interface SysMaxSessionSetInput {
+  readonly value: (typeof MAX_SESSION_VALUES)[number];
+}
+
+export const sysMaxSessionSet = defineRawOperation<SysMaxSessionSetInput>(
+  "cli.sys.maxsession.set",
+  "write",
+  (input) => {
+    assertOneOf(input.value, MAX_SESSION_VALUES, "value");
+    return `sys max_session ${input.value}`;
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Live-firmware-recon operations (fw 4.4.7_RC2 `?` help, owner capture in
+// `references/live-help-fw-4.4.7_RC2.txt`); absent from the Part VIII PDF.
+// ---------------------------------------------------------------------------
+
+export interface SysToggleInput {
+  readonly enabled: boolean;
+}
+
+/** `sys pwenc -e <0|1>`: password encryption (the help text calls it `sys encpw`). */
+export const sysPwenc = defineRawOperation<SysToggleInput>(
+  "cli.sys.pwenc",
+  "write",
+  (input) => `sys pwenc -e ${input.enabled ? "1" : "0"}`,
+);
+
+/** Mirrors console messages to the telnet session. */
+export const sysCon2tel = defineCommandOperation("cli.sys.con2tel", "write", "sys con2tel enable");
+
+/** More-page paging (test only; reset on reboot). */
+export const sysMpage = defineRawOperation<SysToggleInput>(
+  "cli.sys.mpage",
+  "write",
+  (input) => `sys mpage ${input.enabled ? "enable" : "disable"}`,
+);
+
+export const sysIpfixNetflowStatus = defineCommandOperation(
+  "cli.sys.ipfixnetflow.status",
+  "read",
+  "sys ipfix_netflow status",
+);
+
+export type SysIpfixNetflowInput =
+  | { readonly setting: "enable"; readonly enabled: boolean }
+  | { readonly setting: "collector_ip"; readonly address: string }
+  | { readonly setting: "collector_port"; readonly port: number }
+  | { readonly setting: "collector_proto"; readonly protocol: "UDP" | "TCP" }
+  | { readonly setting: "version"; readonly version: 5 | 9 | 10 }
+  | { readonly setting: "inactive_timeout" | "active_timeout"; readonly seconds: number };
+
+export const sysIpfixNetflow = defineRawOperation<SysIpfixNetflowInput>(
+  "cli.sys.ipfixnetflow",
+  "write",
+  (input) => {
+    const prefix = `sys ipfix_netflow ${input.setting}`;
+
+    switch (input.setting) {
+      case "enable":
+        return `${prefix} ${input.enabled ? "1" : "0"}`;
+      case "collector_ip":
+        if (!/^[0-9A-Fa-f.:]+$/.test(input.address)) {
+          throw new InvalidInputError(
+            `address must be an IPv4 or IPv6 address (got "${input.address}").`,
+          );
+        }
+        return `${prefix} ${input.address}`;
+      case "collector_port":
+        assertIntegerInRange(input.port, 1, 65535, "port");
+        return `${prefix} ${String(input.port)}`;
+      case "collector_proto":
+        assertOneOf(input.protocol, ["UDP", "TCP"], "protocol");
+        return `${prefix} ${input.protocol}`;
+      case "version":
+        assertOneOf(String(input.version), ["5", "9", "10"], "version");
+        return `${prefix} ${String(input.version)}`;
+      case "inactive_timeout":
+      case "active_timeout":
+        assertIntegerInRange(input.seconds, 1, 86_400, "seconds");
+        return `${prefix} ${String(input.seconds)}`;
+    }
+  },
+);
 
 export const operations: readonly TypedOperation<never, unknown>[] = [
   sysCfgStatus,
@@ -842,11 +1044,22 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   sysVersion,
   sysQrybuf,
   sysPollbuf,
+  sysPollbufOn,
+  sysPollbufOff,
   sysFrlog,
   sysDnscachetbl,
   sysTime,
+  sysTimeShow,
+  sysTimeInquire,
+  sysTimeServer,
+  sysTimeWan,
+  sysTimeZone,
+  sysTimePseudo,
   sysDashboard,
+  sysDashboardShow,
+  sysDashboardSet,
   sysMaxsession,
+  sysMaxSessionSet,
   sysTr069,
   sysHealth,
   sysAlg,
@@ -867,6 +1080,11 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   sysInfo,
   sysAppStatistic,
   sysAppBandwidth,
+  sysPwenc,
+  sysCon2tel,
+  sysMpage,
+  sysIpfixNetflowStatus,
+  sysIpfixNetflow,
 ];
 
 /** Still-deferred unknown entry outside this task's documented set. */

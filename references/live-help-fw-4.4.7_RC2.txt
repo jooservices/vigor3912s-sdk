@@ -1,0 +1,528 @@
+# Live `?` help output, Vigor3912S firmware 4.4.7_RC2 (read-only help queries,
+# captured by the owner over SSH on 2026-09-29). Source for commands that are
+# absent from the Part VIII PDF (`live-firmware-recon` citations).
+
+DrayTek>  cert ?
+DrayTek> fs format ?
+format the partition "/"
+usg:format
+e.g. > fs format
+
+DrayTek> fs mkfile ?
+create a new file
+usg:mkfile <file>
+ e.g. > fs mkfile readMe.txt
+
+DrayTek> fs mkdir ?
+create a new directory
+usg:mkdir <dir>
+ e.g. > fs mkdir vigor
+
+DrayTek> fs rm ?
+delete a file/directory
+usg:delete <dir|file>
+e.g. > fs rm readMe.txt "/"
+
+DrayTek> fs ren ?
+rename a file/directory
+usg:ren <src Dir|file> <dst Dir|file>
+ e.g. > fs ren readMeOld.txt readMeNew.txt
+
+DrayTek> fs cd ?
+change current directory
+usg:cd <dir>
+e.g. > fs cd vigor
+
+DrayTek> fs cp ?
+copy files on file system
+usg:cp <srcFile> <dstFile>
+e.g. > fs cp readMeOld.tx readMeNew.txt
+
+DrayTek> fs cat ?
+show file contents
+usg:cat <file>
+e.g. > fs cat readMe.txt
+
+DrayTek> fs test ?
+write a predefined string of text into a file for testing purpose
+usg:test <dstFile>
+e.g. > fs test readMe.txt
+
+DrayTek> vpn udp ?
+%Usage:
+% vpn udp [add|del] Remote_IP Remote_Port Local_Port
+%   ex. vpn upd add 1.2.3.4 5555 6666
+% vpn udp [set] Server_IP Server_Port [enable|disable]
+%   ex. vpn upd set 1.2.3.4 8888 enable
+% vpn udp clear udp.DeviceID.local
+%   ex. vpn upd clear udp.aabbccdd.local
+DrayTek> vpn passAPM ?
+% vpn passAPM <on/off>
+
+DrayTek> vpn dpdkctrl ?
+% vpn dpdkctrl "sp dump"
+% vpn dpdkctrl "sa dump"
+% vpn dpdkctrl "sp flush"
+% vpn dpdkctrl "sa flush"
+% vpn dpdkctrl "sp/sa/rt ......"
+% vpn dpdkctrl pptp on/off
+% vpn dpdkctrl wireguard on/off
+% vpn dpdkctrl fastroute off/ip_all/subnet/subnet_all [dpdk accel for SYN/SYN,ACK]
+DrayTek> vpn wg ?
+ vpn wg show: Shows the current configuration and device information.
+ vpn wg enable <on|off>
+ vpn wg interface <listen_port> <wg_ip> [mtu]
+ vpn wg key gen
+ vpn wg key set <privkey_b64>
+ vpn wg peer <idx> pubkey <b64>
+ vpn wg peer <idx> psk <b64>
+ vpn wg peer <idx> allowed-ips <ip>
+ vpn wg peer <idx> keepalive <sec>
+ vpn wg peer <idx> clear
+DrayTek> mngt ssh_oldkex ?
+%% mngt ssh_oldkex enable/disable
+%% Current setting is disabled
+
+DrayTek> mngt acme ?
+invalid command !!
+DrayTek> mngt lb_interface ?
+Command Usage:
+lb_interface [on/off/lan/status]
+lb_interface on:  Turn on the Loopback Interface
+lb_interface off: Turn off the Loopback Interface
+lb_interface lan: Set the specific LAN subnet to the Loopback Interface
+                  Ex: lb_interface lan 3 ==> set LAN3 as the Loopback Interface
+                  Valid LAN subnet range: 1~100
+lb_interface status: Show the Loopback Interface configuration
+
+DrayTek> mngt NoSecureL2TPM ?
+Usage:
+
+ mngt NoSecureL2TPMngt enable/disable
+current setting : disable
+ -------------------------------------------------------------------------------
+ enable this mode may have security holes because L2TP tunnel is not encrypted!!
+DrayTek> mngt ValidationCod ?
+Usage:
+
+ mngt ValidationCode enable/disable
+current setting : disable
+DrayTek> wan dpdk-port ?
+% wan dpdk-port <wan_no> <port_id>
+  wan_no: 1~n; 1:WAN1 2:WAN2 3:WAN3 4:WAN4 5:WAN5 6:WAN6 7:WAN7 8:WAN8 9:WAN9 10:WAN10
+DrayTek> wan drop ?
+% command: wan drop <wan1/wan2/...>
+
+DrayTek> wan detect2 ?
+ Set Ping Detect Setting for Load Balance/Failover
+ wan detect2 -w [wan]      : wan number 1~12
+             -x [index]    : VPN index 1~500
+             -p [index]    : profile index 1~32
+             -s            : show profile
+             -u            : display detect result
+             -t [type]     : disable=0 icmp=1 tcp=2
+             -i [IP1]      : First server IP
+             -j [IP2]      : Second server IP
+             -k [index]    : hostname index for http detect 1~20
+             -g [gateway]  : enable=1 disable=0 gateway as third server
+             -d [id]       : icmp id or tcp port
+             -v [interval] : interval 1~65535 seconds
+             -r [retry]    : retry 1~255 times
+             -l [delay]    : retry will delay 1~255 sec when fail retry times
+             -b [index]    : set to hub VPN ifno is 1~500
+                 ex. wan detect2 -b 1
+             -h            : show usage
+DrayTek> wan lbweight ?
+ Set Load Balance weight of quality parameter
+ Version:1
+ wan lbweight -u [priority] : upload
+              -d [priority] : download
+              -l [priority] : latency
+              -j [priority] : jitter
+              -p [priority] : packet-loss
+                              priority-> high=3 median=2 low=1
+              -t [template] : template number 1~3
+                              0:Custom 1:Bandwidth-Based 2:Quality-Based 3:Reliability-Based
+              -s            : show status
+              -h            : show usage
+DrayTek> wan voipdect ?
+ Set VoIP WAN Dection:
+      -v                  : View Settings in VoIP WAN Detection
+      -e [0|1]            : Disable/Enable VoIP WAN Dection
+      -t [MOS]            : Threshold of Estimated MOS. Change current VoIP WAN less this value.
+         [MOS]            : 2.0 ~ 4.0
+      -b [MOS]            : MOS value for another WAN is better than current WAN.
+         [MOS]            : 0.1 ~ 1.0
+      -h                  : show usage
+      -d [WAN]            : debug: Set VOIP_WAN
+         [WAN]            : 1 ~ MAX_WAN_NO
+      -i                  : dump RTP IP list
+DrayTek> wan phymode ?
+ ***Change Physical Mode now only support WAN2***
+% Usage: wan phymode <?> : show Usage
+%        wan phymode <status> : show WAN current status
+%        wan phymode <Wan number><Wan Physical Mode>
+%        ex: wan phymode 2 0
+%             That means set WAN2 Physical Mode to Ethernet
+% <Wan number>: select wan number
+%     1~12
+% <Wan Physical Mode>: select physical mode
+%     Ethernet      : 0
+DrayTek> sys pwenc ?
+
+% Password Encryption usage
+% sys encpw [-<command> <pamapters> ...]
+%  -<command> usage:
+%     -e <0|1>        : Password Encryption [Disable|Enable]
+
+
+DrayTek> sys con2tel ?
+ Console To Telnet
+ Usage:
+ "sys con2tel enable" to enable to display message from console to telnet
+
+DrayTek> sys mpage ?
+Enable/Disable More Page
+Syntax:
+  sys mpage enable: Set enable show more page.
+  sys mpage disable: Set disable show more page.
+
+  (*) For test only, just save on memory, it will be reset after reboot.
+
+DrayTek> sys ipfix_netflow ?
+status: show the status
+enable: [1|0] 0:disable, 1:enable/restart
+collector_ip: [192.168.1.10|00:10:23:22:33:44:55:66] ip address
+collector_port: [4739] port
+collector_proto: [UDP|TCP] protocol
+version: [5|9|10] NETFLOWv5/NETFLOWv9/IPFIX
+inactive_timeout(sec): [15] export message after timeout without any packets.
+active_timeout(sec): [300] export message but buffer not full after timeout.
+DrayTek> sys cancel ?
+DrayTek> ip igmp_fl ?
+% Valid subcommands are:
+enable        disable       status
+
+DrayTek> ip dataflowmonit ?
+Usage :
+Enable:   ip dataflowmonitor on
+Disable:  ip dataflowmonitor off
+Status:   ip dataflowmonitor status
+
+To display IP TX/RX rate: ip bandwidth show
+To display IP session(s): ip session show
+
+DrayTek> ip dnssec ?
+DrayTek> ip6 debug ?
+% Valid subcommands are:
+type          level
+
+DrayTek> ipf default ?
+All filter rules was set to default values.
+
+DrayTek> ipf hash_analysis ?
+Flow Hash Analysis Usage :
+   (One flow has two hash counts)
+(1) ipf hash_analysis <summary/threshold/interval/total/detail>
+    summary: show total flow hash distribution
+    threshold: show hash number that over user defined hash counts
+    interval: show the summary on user defined range
+    total: show total hash counts and current flow counts
+    detail: show every hash counts on user defined range
+    Note that hash index range is 0-8191
+
+(2) ipf hash_analysis threshold <hash counts>
+ ex:ipf hash_analysis threshold 8
+
+(3) ipf hash_analysis interval <begin index> <end index>
+ ex:ipf hash_analysis interval 150 450
+ ex:ipf hash_analysis interval 3110 3280
+
+(4) ipf hash_analysis detail <begin index> <end index>
+ ex:ipf hash_analysis detail 60 150
+ ex:ipf hash_analysis detail 5580 7000
+DrayTek> qos setdefault ?
+setdefault!
+DrayTek> show ping ?
+% ping [wan1/wan2~wan12] [daily]
+DrayTek> usb FTPusage ?
+FTP Usage: ---
+DrayTek> vlan map ?
+LAN 1: 01
+LAN 2:    02
+LAN 3:       03
+LAN 4:          04
+LAN 5:             05
+LAN 6:                06
+
+DrayTek> service ?
+
+Service Status usage
+service [-command] <parameters>
+  -s : show service status
+  -r : refresh service status
+  -l : login to MyVigor [<account> <password>]
+       (only needs to login once)
+  -i : input the new owner and email for transfer
+       [<new_owner> <new_owner_email>]
+  -t : transfer this device to the new owner [yes|no]
+  -c : clear account information
+
+
+DrayTek> swm ?
+% Valid subcommands are:
+show          get           post          enable        disable       group
+profile       detail        maintain      search        db            alert
+log           snmp          tr069
+
+DrayTek> local_8021x ?
+Usage:
+%% Valid subcommands are:
+%% local_8021x show
+%% local_8021x enable [0/1]
+%% local_8021x cer_set [UID]
+%% local_8021x show_local_cer
+%%   This command can lookup all Local certificate's UID.
+%% local_8021x set_localdot1x_method -e -d method number
+%%   -e [method_idx]: set mehod
+%%   -d [method_idx]: delete mehod
+%%   The method number as follows:
+%    1  EAP_PEAP/MSCHAPv2
+%    2  EAP_TTLS/PAP
+%    3  EAP_TTLS/MSCHAP
+%    4  EAP_TTLS/MSCHAPv2
+%% ex: local_8021x set_localdot1x_method -e 1
+%     That means you set EAP_PEAP/MSCHAPv2 as 802.1X authentication method!
+DrayTek> apm ?
+% Valid subcommands are:
+enable        disable       show          clear         discover      query
+profile       cache         lbcfg         apsyslog      syslog        stanum
+
+DrayTek> appqos ?
+
+ APP QoS setting usage:
+
+   view        : View the APP QoS profile setting
+   enable MODE : Enable/Disable APP QoS
+                 (MODE : 0:Disable 1:Enable)
+   traceable   : Tracable application QoS setting
+   untraceable : Unracable application QoS setting
+
+DrayTek> csm ?
+ CSM command usage:
+ appe: APP Enforcement setting
+ ucf: URL content filter setting
+ wcf: Web content filter setting
+ dnsf: DNS filter setting
+ quic: Quic parser setting
+
+DrayTek> dos ?
+Usage:
+ddos [-V|D|A]
+ddos [-s ATTACK_F [THRESHOLD] [TIMEOUT] ]
+ddos [-a|e [ATTACK_F][ATTACK_O] |d [ATTACK_F][ATTACK_O] ]
+ddos [-o [LOG_TYPE]|p [LOG_TYPE] |l [LOG_TYPE] ]
+  -V: View the configuration of DoS defense system
+  -D: Deactivate the DoS defense system
+  -A: Activate the DoS defense system
+  -s: Enable the defense function for a specific attack and set its parameter(s)
+      No further parameter(s), use the pre-setting or default value(s)
+    ATTACK_F: Specify the name of flooding attack(s) or portscan
+              (Eg. synflood, udpflood, icmpflood, or portscan)
+    THRESHOLD: A value larger than 20 (pkt/sec)
+    TIMEOUT: A value large than 5 (sec)
+  -a: Enable the defense function for all attacks listed in ATTACK_O
+  -e: Enable the defense function for a specific attack(s)
+    ATTACK_O: Specify the name of other attacks?
+              (Eg. ip_option, tcp_flag, land, teardrop, smurf, pingofdeath,
+               traceroute, icmp_frag, syn_frag, unknow_proto, or fraggle)
+  -d: Disable the defense function for a specific attack(s)
+  -b: Enable/Disable debug message
+  -P [add4] [ipv4_addr]: add ipv4 address in Passing List
+     [remove4] [ipv4_addr/all]: remove ipv4 address in Passing List
+     [add6] [ipv6_addr]: add ipv6 address in Passing List
+     [remove6] [ipv6_addr/all]: remove ipv6 address in Passing List
+     [show]: show Passing List
+  -B [add4] [ipv4_addr]: add ipv4 address in Blocking List
+     [remove4] [ipv4_addr/all]: remove ipv4 address in Blocking List
+     [add6] [ipv6_addr]: add ipv6 address in Blocking List
+     [remove6] [ipv6_addr/all]: remove ipv6 address in Blocking List
+     [show]: show Blocking List
+  -o: Enable/Disable dos defense log
+     [LOG_TYPE]: 0/1 (Disable/Enable)
+  -p: Enable/Disable spoofing defense log
+     [LOG_TYPE]: 0/1 (Disable/Enable)
+  -l: Enable/Disable dos defense black/white list log
+     [LOG_TYPE]: 0/1/2/3 (None/WhiteList/BlackList/All)
+  -f: Set priority of Whitelist/Blacklist
+     [0/1/show]: 0:WhiteList 1:BlackList
+  -i: Set Whitelist/Blacklist log sending time interval
+     [1/2/3/4/show] 1:30 2:60 3:180 4:300 seconds
+
+DrayTek> dpdk ?
+
+Valid commands:
+    accpkt
+    antidos
+    fastrt
+    loopd
+    proto
+    pcap
+    statistic
+    cmdlog
+    pktlog
+    say
+
+DrayTek> internet ?
+Usage:
+internet -W n -M n [-<command> <parameter> | ... ]
+  -h: Usage Menu
+  -W n: Selete WAN interface to be set
+     n: 1: WAN1 ,2: WAN2, ... x: WANx. Default is WAN1
+  -M n: Set Internet Access Mode (Mandatory)
+     n= 0: Offline, 1: PPPoE, 2: Dynamic IP, 3: Static IP
+        4: PPTP with Dynamic IP, 5: PPTP with Static IP, 6: L2TP with Dynamic IP
+        7: L2TP with Static IP
+  -S <isp name>: Set ISP Name (max. 23 characters)
+  -P <on/off>: enable PPPoE Service Name, it will bring out "ISP Name" as PPPoE Service Name
+  -u <username>: Set Username (max. 49 characters)
+  -p <password>: Set Password (max. 49 characters)
+  -a n: PPP Authentication Type
+     n= 0: PAP/CHAP (default), 1: PAP Only
+  -t n: Always-on/Idle Timeout
+     n= -1: Always-on, 1 ~ 999: Idle time for offline (default 180 seconds)
+  -i <ip address>: PPP IP Negotiation Method
+     <ip address>= 0.0.0.0: Assigned by ISP (default), aaa.bbb.ccc.ddd: Fixed IP
+  -w <ip address>: Assign WAN IP
+     <ip address>= aaa.bbb.ccc.ddd: IP for WAN port
+  -n <netmask>: Assign WAN netmask
+     <netmask>= 255.255.255.xxx: netmask for WAN port
+  -g <gateway>: Assign WAN Gateway IP
+     <gateway>= www.xxx.yyy.zzz: gateway IP for WAN port
+  -s <server ip>: Set PPTP/L2TP Server IP
+     <server ip>= ppp.qqq.rrr.sss: PPTP/L2TP server IP
+  -A <idx>: Set to Always On mode, and <idx> as backup WAN#
+  -B <mode>: Set to Backup mode;
+     <mode> 0: When any WAN disconnect; 1: When all WAN disconnect.
+  -V : View Internet Access Profile
+  -R n: Set (PPP mode) WAN Connection Detection Echo Interval (3-60) secondes
+  -H n: Set (PPP mode) WAN Connection Detection Max Echo Failure Count (3-60)
+Example:
+ internet -W 2 -M 2
+ internet -W 1 -M 1 -u link1 -p link1 -a 0
+
+DrayTek> linux ?
+Command Usage:
+    setlinuxip <-i IP> [-c CIDR] [-g Gateway] [-v VLANx]
+    status
+    clean <-a | -b | -d | -o / -w>
+    service <telnet/ssh> <enable/disable/status>
+    syslog  <enable/disable/status>
+
+DrayTek> log ?
+usage:
+log [-cfhiptwx?][-F a|c|f|w]
+
+-c      for call log
+-f      for IP filter log
+-F      flush log buffer
+  a     flush all logs
+  c     flush the call log
+  f     flush the IP filter log
+  w     flush the wan log
+-h      for this usage help
+-p      for PPP/MP log
+-t      display to the end
+-w      for WAN log
+-x      for packet body hex dump
+
+DrayTek> object ?
+ Object setting usage:
+ ip: IP object setting
+ ipv6: IPv6 object setting
+ country: Country object setting
+ service: Service object setting
+ kw: Key word object setting
+ fe: File extension object setting
+ sms: SMS object setting
+ mail: Mail Service object setting
+ noti: Notification object setting
+ schedule: Schedule object setting
+
+DrayTek> port ?
+% port <1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, all> <AN, 100F, 100H, 10F, 10H, status>
+% port <wan1, wan2, wan3, wan4> <AN, 1000F, 100F, 100H, 10F, 10H, status>
+% port status : to see ethernet port status.
+% port sniff <on,off,port,txrx,restart,status>
+% port 8021x <enable,disable,status,addport,delport>
+% port wanfc : to set wan flow control.
+
+DrayTek> portmaptime ?
+Usage:
+PortmapTimeSetting   [-<command> <parameter> | ... ]
+ -t <sec> : set TCP protocol session timeout.
+ -u <sec> : set UDP protocol session timeout.
+ -i <sec> : set ICMP protocol session timeout.
+ -w <sec> : set TCP WWW protocol session timeout.
+ -s <sec> : set TCP SYN protocol session timeout.
+ -f       : flush all portmaps (useful for diagnostics)
+ -l <List> :    List your all setting
+
+Note: this telnet cmd only works when half of the sessions are still available
+DrayTek> radius ?
+Usage:
+%% Internal RADIUS:
+%% radius enable [0/1]
+%% radius authport [port_number]
+%% radius set_auth_method [method idx]
+%%        method idx: 0 is only PAP, 1 is PAP/CHAP/MS-CHAP/MS-CHAPv2
+%% radius client [add/del] [idx] options...
+%% radius show
+%% radius enable_dot1x [0/1]
+%%        Enable(1) or disable(0) the 802.1X Authentication Service of
+%%        RADIUS Server. Default is disabled.
+%% radius cer_set [UID]
+%% radius show_local_cer
+%%   You can lookup the UID of all Local certificates.
+%% radius set_dot1x_method options...
+%%   -e [method_idx]: set mehod
+%%   -d [method_idx]: delete mehod
+%%   The method number as follows:
+%    1  EAP_PEAP/MSCHAPv2
+%    2  EAP_TTLS/PAP
+%    3  EAP_TTLS/MSCHAP
+%    4  EAP_TTLS/MSCHAPv2
+%% ex: radius set_dot1x_method -e 1
+%     That means you set EAP_PEAP/MSCHAPv2 as 802.1X authentication method!
+%% radius show
+
+%% client options:
+%%   -i [address]: client IPv4 address(domain)
+%%      ex: -i 192.168.1.1
+%%   -m [mask]: client IPv4 mask
+%%      ex: -m 255.255.255.0
+%%   -p [prefix]: client IPv6 prefix
+%%      ex : -p 2001:cc::1
+%%   -l [length]: client IPv6 prefix length
+%%      ex : -l 64
+%%   -s [secret]: client secret
+%%      ex : -s 123
+%% ex: radius client add 1 -i 192.168.1.1 -m 255.255.255.0 -s 123
+
+%% External RADIUS:
+%% radius external [options]
+%% for usage: radius external ?
+DrayTek> user ?
+Usage:
+
+ user set : setup the user management general setup
+ user edit : setup the user profile
+ user account : setup the user account setting
+ user setdefault : setup the all user profile to factory default
+
+DrayTek> wol ?
+% wol up <MAC Address>/<IP Address>
+
+% wol fromWan <on/off/any>
+
+% wol fromWan_Setting <idx> <ip address> <mask>

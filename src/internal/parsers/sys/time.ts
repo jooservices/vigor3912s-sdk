@@ -7,10 +7,8 @@
  * free-form -- return the trimmed raw text (YAGNI).
  */
 
-export interface SysTime {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseSysTime(text: string): SysTime {
-  return { raw: text.trim() };
-}
+export type SysTime = RawCommandOutput;
+
+export const parseSysTime: (text: string) => SysTime = parseRawText;

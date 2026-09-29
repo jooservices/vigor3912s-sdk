@@ -44,67 +44,22 @@
  * the raw exchange text (see `internal/parsers/qos/shared.ts`).
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseQosClass } from "../internal/parsers/qos/class.js";
 import { parseQosSetup } from "../internal/parsers/qos/setup.js";
 import { parseQosType } from "../internal/parsers/qos/type.js";
 import { parseQosVoip } from "../internal/parsers/qos/voip.js";
 import type { RawCommandOutput } from "../internal/parsers/qos/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertPositiveInteger(value: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(value)}).`);
-  }
-}
-
-/**
- * Generic runtime membership check for narrow numeric-literal-union inputs
- * (same rationale as `wan.ts`'s `assertOneOf`: TypeScript's literal types
- * only describe well-behaved callers, this exists for callers -- including
- * plain-JS callers and tests -- that don't honor them).
- */
-function assertNumberOneOf<T extends number>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly number[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => String(entry)).join(", ")} (got ${String(value)}).`,
-    );
-  }
-}
-
-const SINGLE_CLI_TOKEN_PATTERN = /^\S+$/;
-
-function assertSingleToken(value: string, name: string): void {
-  if (!SINGLE_CLI_TOKEN_PATTERN.test(value)) {
-    throw new Error(
-      `${name} must be a single non-empty token with no whitespace (got "${value}").`,
-    );
-  }
-}
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertNumberOneOf,
+  assertPositiveInteger,
+  defineCommandOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 const IPV4_PART =
   "(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}";
@@ -112,7 +67,7 @@ const QOS_CLASS_ADDRESS_PATTERN = new RegExp(`^${IPV4_PART}(:${IPV4_PART})?$`);
 
 function assertQosClassAddress(value: string, name: string): void {
   if (!QOS_CLASS_ADDRESS_PATTERN.test(value)) {
-    throw new Error(
+    throw new InvalidInputError(
       `${name} must be a single IPv4 address or an "ip1:ip2" range/subnet pair (got "${value}").`,
     );
   }
@@ -218,7 +173,7 @@ function buildSetupFrames(input: QosSetupInput): readonly CommandFrame[] {
   }
 
   if (parts.length === 1) {
-    throw new Error("At least one qos setup option must be provided.");
+    throw new InvalidInputError("At least one qos setup option must be provided.");
   }
 
   return [frameSingleCommand(parts.join(" "))];
@@ -265,7 +220,7 @@ function pushOptionalNameAndAddress(
   input: { readonly name?: string; readonly localAddress?: string; readonly ruleEnabled?: boolean },
 ): void {
   if (input.name !== undefined) {
-    assertSingleToken(input.name, "name");
+    assertCliValue(input.name, "name");
     parts.push(`-n ${input.name}`);
   }
 }
@@ -337,11 +292,11 @@ export type QosTypeInput = QosTypeAddInput;
 const QOS_PORT_RANGE_PATTERN = /^\d{1,5}:\d{1,5}$/;
 
 function buildTypeFrames(input: QosTypeInput): readonly CommandFrame[] {
-  assertSingleToken(input.name, "name");
+  assertCliValue(input.name, "name");
   assertIntegerInRange(input.protocolType, 1, 254, "protocolType");
 
   if (!QOS_PORT_RANGE_PATTERN.test(input.portRange)) {
-    throw new Error(`portRange must look like "start:end" (got "${input.portRange}").`);
+    throw new InvalidInputError(`portRange must look like "start:end" (got "${input.portRange}").`);
   }
 
   return [
@@ -377,9 +332,22 @@ export const qosVoip: TypedOperation<QosVoipInput, RawCommandOutput> = {
   parse: (exchanges) => parseQosVoip(firstExchangeText(exchanges)),
 };
 
+// ---------------------------------------------------------------------------
+// Live-firmware-recon operations (fw 4.4.7_RC2 `?` help, owner capture in
+// `references/live-help-fw-4.4.7_RC2.txt`); absent from the Part VIII PDF.
+// ---------------------------------------------------------------------------
+
+/** Resets QoS to factory defaults. */
+export const qosSetdefault = defineCommandOperation(
+  "cli.qos.setdefault",
+  "destructive",
+  "qos setdefault",
+);
+
 export const operations: readonly TypedOperation<never, unknown>[] = [
   qosSetup,
   qosClass,
   qosType,
   qosVoip,
+  qosSetdefault,
 ];

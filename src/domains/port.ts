@@ -20,7 +20,6 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseStatus } from "../internal/parsers/port/status.js";
 import { parseSniffStatus } from "../internal/parsers/port/sniff-status.js";
@@ -32,41 +31,12 @@ import { parseDot1xAddport } from "../internal/parsers/port/dot1x-addport.js";
 import { parseDot1xDelport } from "../internal/parsers/port/dot1x-delport.js";
 import { parseSpeed } from "../internal/parsers/port/speed.js";
 import type { RawCommandOutput } from "../internal/parsers/port/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
-    );
-  }
-}
-
-function assertPositiveInteger(value: number, name: string): void {
-  assertInteger(value, name);
-  if (value <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(value)}).`);
-  }
-}
+import {
+  assertIntegerInRange,
+  assertOneOf,
+  assertPositiveInteger,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.port.status -- `port status` (rawLine 6349) -- read

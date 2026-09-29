@@ -9,8 +9,9 @@
  */
 
 export interface SysCfgStatus {
-  readonly profileVersion: string;
-  readonly status: string;
+  /** `null` when the line is missing from the output. */
+  readonly profileVersion: string | null;
+  readonly status: string | null;
 }
 
 const PATTERN = /Profile version:\s*(?<profileVersion>\S+)\s+Status:\s*(?<status>.+?)\s*$/m;
@@ -19,7 +20,7 @@ export function parseSysCfgStatus(text: string): SysCfgStatus {
   const match = PATTERN.exec(text);
 
   return {
-    profileVersion: match?.groups?.profileVersion ?? "",
-    status: match?.groups?.status ?? "",
+    profileVersion: match?.groups?.profileVersion ?? null,
+    status: match?.groups?.status ?? null,
   };
 }

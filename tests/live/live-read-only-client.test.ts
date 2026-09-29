@@ -12,6 +12,7 @@ import type { TransportExchange } from "../../src/internal/execution/transport.j
 import {
   LiveClientRejectedError,
   LiveReadOnlyClient,
+  isPrivateLanAddress,
   type LiveReadOnlyClientOptions,
 } from "../../src/live/live-read-only-client.js";
 import { liveReadOnlyAllowlist } from "../../src/live/allowlist.js";
@@ -52,6 +53,8 @@ function fixtureOperation(
   };
 }
 
+const LAN_ENDPOINT = { address: "192.168.1.1", port: 22 } as const;
+
 interface SpyTransportHandle {
   readonly transport: FakeTransport;
   readonly send: MockInstance<FakeTransport["send"]>;
@@ -69,11 +72,12 @@ function createSpyTransport(
   response: TransportExchange = { stdout: SYS_VERSION_SAMPLE, stderr: "" },
   options: FakeTransportOptions = {},
 ): SpyTransportHandle {
-  const transport = new FakeTransport(
-    options.responder === undefined && options.responses === undefined
+  const transport = new FakeTransport({
+    remoteEndpoint: LAN_ENDPOINT,
+    ...(options.responder === undefined && options.responses === undefined
       ? { responses: [response] }
-      : options,
-  );
+      : options),
+  });
   const send = vi.spyOn(transport, "send");
   const close = vi.spyOn(transport, "close");
   const isOpenSpy = vi.spyOn(transport, "isOpen", "get");
@@ -396,9 +400,109 @@ describe("LiveReadOnlyClient -- happy path", () => {
   });
 });
 
+describe("LiveReadOnlyClient refuses router rejections", () => {
+  it("rejects with command_rejected instead of parsing a DrayOS error line", async () => {
+    const spy = createSpyTransport({ stdout: "% Invalid command !!!", stderr: "" });
+    const client = LiveReadOnlyClient.create(buildValidOptions(spy));
+
+    await expect(client.invoke(READ_ID)).rejects.toMatchObject({
+      code: sdkErrorCodes.commandRejected,
+    });
+  });
+});
+
 describe("liveReadOnlyAllowlist sanity (used by the fixtures above)", () => {
   it("contains both seed ids this test file relies on", () => {
     expect(liveReadOnlyAllowlist).toContain(READ_ID);
     expect(liveReadOnlyAllowlist).toContain(OTHER_ALLOWLISTED_ID);
+  });
+});
+
+describe("LiveReadOnlyClient binds the LAN-only policy to the real transport endpoint", () => {
+  it.each([
+    [undefined, /remoteEndpoint is required/],
+    [{ address: "router.lan", port: 22 }, /resolved peer IP, not a hostname/],
+    [{ address: "8.8.8.8", port: 22 }, /not a private-LAN address/],
+    [{ address: "2001:db8::1", port: 22 }, /not a private-LAN address/],
+    [{ address: "192.168.1.1", port: 2222 }, /does not match TransportPolicy.port \(22\)/],
+  ] as const)("rejects endpoint %j before any command", (endpoint, pattern) => {
+    const spy = createSpyTransport();
+    spy.transport.remoteEndpoint = endpoint;
+
+    expect(() => LiveReadOnlyClient.create(buildValidOptions(spy))).toThrow(pattern);
+    expect(spy.send).not.toHaveBeenCalled();
+  });
+
+  it("re-checks the endpoint before every command (a reconnect to a public peer is refused)", async () => {
+    const spy = createSpyTransport();
+    const client = LiveReadOnlyClient.create(buildValidOptions(spy));
+
+    spy.transport.remoteEndpoint = { address: "203.0.113.10", port: 22 };
+
+    await expect(client.invoke(READ_ID)).rejects.toThrow(/not a private-LAN address/);
+    expect(spy.send).not.toHaveBeenCalled();
+  });
+
+  it("refuses commands and closes the session once maxSessionMs has elapsed", async () => {
+    vi.useFakeTimers();
+    try {
+      const spy = createSpyTransport();
+      const client = LiveReadOnlyClient.create({
+        ...buildValidOptions(spy),
+        sessionPolicy: { maxConcurrentCommands: 1, idleTimeoutMs: 5_000, maxSessionMs: 1_000 },
+      });
+
+      vi.advanceTimersByTime(1_000);
+
+      await expect(client.invoke(READ_ID)).rejects.toThrow(/maxSessionMs elapsed/);
+      expect(spy.close).toHaveBeenCalledWith("max_session_exceeded");
+      expect(spy.send).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects an invalid session policy", () => {
+    const spy = createSpyTransport();
+
+    expect(() =>
+      LiveReadOnlyClient.create({
+        ...buildValidOptions(spy),
+        sessionPolicy: { maxConcurrentCommands: 2 as 1, idleTimeoutMs: 1, maxSessionMs: 1 },
+      }),
+    ).toThrow(/maxConcurrentCommands must be 1/);
+    expect(() =>
+      LiveReadOnlyClient.create({
+        ...buildValidOptions(spy),
+        sessionPolicy: { maxConcurrentCommands: 1, idleTimeoutMs: 0, maxSessionMs: 1 },
+      }),
+    ).toThrow(/idleTimeoutMs must be a positive integer/);
+  });
+});
+
+describe("isPrivateLanAddress", () => {
+  it.each([
+    ["10.0.0.1", true],
+    ["172.16.0.1", true],
+    ["172.31.255.255", true],
+    ["172.32.0.1", false],
+    ["192.168.1.1", true],
+    ["169.254.10.1", true],
+    ["127.0.0.1", false],
+    ["8.8.8.8", false],
+    ["fd12:3456::1", true],
+    ["fe80::1", true],
+    ["fc00::1", true],
+    ["fc::1", false],
+    ["fd1::1", false],
+    ["fe8::1", false],
+    ["fe80::1%en0", true],
+    ["::ffff:192.168.1.1", true],
+    ["::ffff:8.8.8.8", false],
+    ["2001:db8::1", false],
+    ["::1", false],
+    ["not-an-ip", false],
+  ] as const)("%s -> %s", (address, expected) => {
+    expect(isPrivateLanAddress(address)).toBe(expected);
   });
 });

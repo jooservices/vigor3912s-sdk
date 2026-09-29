@@ -40,14 +40,14 @@ describe("cli.ldap.view -- ldap view (read)", () => {
     });
   });
 
-  it("falls back to empty/null fields for text that doesn't match the documented shape", () => {
+  it("reports unknown (null) fields for text that doesn't match the documented shape", () => {
     expect(parseLdapView("not a status block")).toEqual({
-      enabled: false,
-      bindType: "",
-      sslEnabled: false,
-      regularDn: "",
-      regularPassword: "",
-      serverIp: "",
+      enabled: null,
+      bindType: null,
+      sslEnabled: null,
+      regularDn: null,
+      regularPassword: null,
+      serverIp: null,
       serverPort: null,
     });
   });

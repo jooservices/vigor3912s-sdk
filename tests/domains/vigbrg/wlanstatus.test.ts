@@ -39,7 +39,7 @@ describe("cli.vigbrg.wlanstatus -- vigbrg wlanstatus (read)", () => {
 
   it("returns an empty table for text that doesn't match the documented shape", () => {
     expect(parseWlanStatus("not a wlanstatus block")).toEqual({
-      bridgeState: "",
+      bridgeState: null,
       entries: [],
     });
   });

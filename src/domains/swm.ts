@@ -51,7 +51,6 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseSwmAlert } from "../internal/parsers/swm/alert.js";
 import { parseSwmDb } from "../internal/parsers/swm/db.js";
@@ -67,92 +66,17 @@ import { parseSwmSearch } from "../internal/parsers/swm/search.js";
 import { parseSwmShow } from "../internal/parsers/swm/show.js";
 import { parseSwmSnmp } from "../internal/parsers/swm/snmp.js";
 import type { RawCommandOutput } from "../internal/parsers/swm/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertPositiveInteger(value: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(value)}).`);
-  }
-}
-
-/**
- * Generic runtime membership check for narrow string-literal-union inputs
- * (mirrors `wan.ts`'s `assertOneOf`, kept local to this family per the
- * self-assembled-domains model's deliberate small-local-helper duplication
- * -- no shared cross-domain validator module exists yet, YAGNI).
- */
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
-    );
-  }
-}
-
-const IPV4_PATTERN = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-
-function assertIpv4(value: string, name: string): void {
-  if (!IPV4_PATTERN.test(value)) {
-    throw new Error(`${name} must be a valid IPv4 address (got "${value}").`);
-  }
-}
-
-/**
- * Every documented `swm *` MAC-address parameter is printed unadorned hex,
- * e.g. `001DAA0CCD08` (rawLine 12494 `swm get`'s own parameter
- * description), not colon-separated -- distinct from `ip.ts`'s
- * colon-separated `MAC_PATTERN`, which documents a different family's
- * syntax.
- */
-const MAC_PATTERN = /^[0-9A-Fa-f]{12}$/;
-
-function assertMac(value: string, name: string): void {
-  if (!MAC_PATTERN.test(value)) {
-    throw new Error(`${name} must be a 12 hex-digit MAC address (got "${value}").`);
-  }
-}
-
-/**
- * Every documented free-text `swm *` parameter (`<NAME>`, `<PASSWD>`,
- * `<COMMENT>`, etc.) appears only as a single unquoted word in every
- * worked example in the corpus (e.g. rawLine 12554 `pease`, rawLine 12675
- * `availablefor2floor`, rawLine 12554 `jpsword`) -- this DrayOS CLI is
- * documented as space-delimited positional syntax with no quoting
- * mechanism, so a value containing whitespace could not round-trip through
- * the real router's parser regardless of its position in the frame.
- * Rejecting whitespace here (in addition to `frameSingleCommand`'s own
- * framing-level rejections) keeps every generated frame faithful to the
- * documented single-token shape.
- */
-function assertToken(value: string, name: string): void {
-  if (value.length === 0 || /\s/.test(value)) {
-    throw new Error(
-      `${name} must be a single non-empty token with no whitespace (got "${value}").`,
-    );
-  }
-}
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertIpv4,
+  assertMac,
+  assertNonNegativeInteger,
+  assertOneOf,
+  assertPositiveInteger,
+  assertTrailingText,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.swm.show -- `swm show <LAN_port>` (rawLine 12428) -- read
@@ -184,7 +108,7 @@ export interface SwmGetInput {
 }
 
 function buildSwmGetFrames(input: SwmGetInput): readonly CommandFrame[] {
-  assertMac(input.mac, "mac");
+  assertMac(input.mac, "mac", "bare");
 
   return [frameSingleCommand(`swm get ${input.mac}`)];
 }
@@ -205,7 +129,7 @@ export interface SwmPostInput {
 }
 
 function buildSwmPostFrames(input: SwmPostInput): readonly CommandFrame[] {
-  assertMac(input.mac, "mac");
+  assertMac(input.mac, "mac", "bare");
 
   return [frameSingleCommand(`swm post ${input.mac}`)];
 }
@@ -259,8 +183,8 @@ function buildSwmGroupFrames(input: SwmGroupInput): readonly CommandFrame[] {
   switch (input.action) {
     case "setWithPassword": {
       assertIntegerInRange(input.idx, 1, 10, "idx");
-      assertToken(input.name, "name");
-      assertToken(input.password, "password");
+      assertCliValue(input.name, "name");
+      assertCliValue(input.password, "password");
 
       return [
         frameSingleCommand(`swm group set ${String(input.idx)} ${input.name} 1 ${input.password}`),
@@ -268,7 +192,7 @@ function buildSwmGroupFrames(input: SwmGroupInput): readonly CommandFrame[] {
     }
     case "setNoPassword": {
       assertIntegerInRange(input.idx, 1, 10, "idx");
-      assertToken(input.name, "name");
+      assertCliValue(input.name, "name");
 
       return [frameSingleCommand(`swm group set ${String(input.idx)} ${input.name} 0`)];
     }
@@ -277,13 +201,13 @@ function buildSwmGroupFrames(input: SwmGroupInput): readonly CommandFrame[] {
     }
     case "add": {
       assertIntegerInRange(input.idx, 1, 10, "idx");
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm group add ${String(input.idx)} ${input.mac}`)];
     }
     case "delete": {
       assertIntegerInRange(input.idx, 1, 10, "idx");
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm group delete ${String(input.idx)} ${input.mac}`)];
     }
@@ -312,12 +236,12 @@ export type SwmProfileInput =
 function buildSwmProfileFrames(input: SwmProfileInput): readonly CommandFrame[] {
   switch (input.action) {
     case "add": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm profile add ${input.mac}`)];
     }
     case "delete": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm profile delete ${input.mac}`)];
     }
@@ -325,12 +249,12 @@ function buildSwmProfileFrames(input: SwmProfileInput): readonly CommandFrame[] 
       return [frameSingleCommand("swm profile show")];
     }
     case "enableAll": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm profile enable_all ${input.mac}`)];
     }
     case "disableAll": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm profile disable_all ${input.mac}`)];
     }
@@ -383,36 +307,28 @@ export type SwmDetailInput =
       readonly limit: number;
     };
 
-function assertNonNegativeInteger(value: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < 0) {
-    throw new Error(`${name} must not be negative (got ${String(value)}).`);
-  }
-}
-
 function buildSwmDetailFrames(input: SwmDetailInput): readonly CommandFrame[] {
   switch (input.action) {
     case "comment": {
-      assertMac(input.mac, "mac");
-      assertToken(input.comment, "comment");
+      assertMac(input.mac, "mac", "bare");
+      assertCliValue(input.comment, "comment");
 
       return [frameSingleCommand(`swm detail comment ${input.mac} ${input.comment}`)];
     }
     case "name": {
-      assertMac(input.mac, "mac");
-      assertToken(input.name, "name");
+      assertMac(input.mac, "mac", "bare");
+      assertCliValue(input.name, "name");
 
       return [frameSingleCommand(`swm detail name ${input.mac} ${input.name}`)];
     }
     case "passwd": {
-      assertMac(input.mac, "mac");
-      assertToken(input.password, "password");
+      assertMac(input.mac, "mac", "bare");
+      assertCliValue(input.password, "password");
 
       return [frameSingleCommand(`swm detail passwd ${input.mac} ${input.password}`)];
     }
     case "config": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
       assertNonNegativeInteger(input.configIndex, "configIndex");
 
       return [frameSingleCommand(`swm detail config ${input.mac} ${String(input.configIndex)}`)];
@@ -421,17 +337,17 @@ function buildSwmDetailFrames(input: SwmDetailInput): readonly CommandFrame[] {
       return [frameSingleCommand("swm detail show")];
     }
     case "portShow": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm detail port show ${input.mac}`)];
     }
     case "port": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
       assertIntegerInRange(input.port, 1, 28, "port");
-      assertToken(input.flag, "flag");
+      assertCliValue(input.flag, "flag");
       assertNonNegativeInteger(input.schedule1, "schedule1");
       assertNonNegativeInteger(input.schedule2, "schedule2");
-      assertToken(input.description, "description");
+      assertCliValue(input.description, "description");
 
       return [
         frameSingleCommand(
@@ -440,7 +356,7 @@ function buildSwmDetailFrames(input: SwmDetailInput): readonly CommandFrame[] {
       ];
     }
     case "rateToggle": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
       assertIntegerInRange(input.port, 1, 28, "port");
       assertOneOf(input.direction, ["i", "e"], "direction");
 
@@ -451,7 +367,7 @@ function buildSwmDetailFrames(input: SwmDetailInput): readonly CommandFrame[] {
       ];
     }
     case "rateLimit": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
       assertIntegerInRange(input.port, 1, 28, "port");
       assertOneOf(input.direction, ["i", "e"], "direction");
       assertPositiveInteger(input.limit, "limit");
@@ -485,12 +401,12 @@ export type SwmMaintainInput =
 function buildSwmMaintainFrames(input: SwmMaintainInput): readonly CommandFrame[] {
   switch (input.action) {
     case "reboot": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm maintain reboot ${input.mac}`)];
     }
     case "reset": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm maintain reset ${input.mac}`)];
     }
@@ -521,16 +437,10 @@ export type SwmSearchInput =
   | { readonly action: "ip"; readonly ip: string }
   | { readonly action: "description"; readonly query: string };
 
-function assertNonEmpty(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
-  }
-}
-
 function buildSwmSearchFrames(input: SwmSearchInput): readonly CommandFrame[] {
   switch (input.action) {
     case "mac": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm search mac ${input.mac}`)];
     }
@@ -540,7 +450,7 @@ function buildSwmSearchFrames(input: SwmSearchInput): readonly CommandFrame[] {
       return [frameSingleCommand(`swm search ip ${input.ip}`)];
     }
     case "description": {
-      assertNonEmpty(input.query, "query");
+      assertTrailingText(input.query, "query");
 
       return [frameSingleCommand(`swm search description ${input.query}`)];
     }
@@ -636,7 +546,28 @@ export type SwmAlertInput =
       readonly objectIndex: number;
       readonly objectValue: number;
     }
-  | { readonly action: "display" };
+  | { readonly action: "display" }
+  | {
+      /** `swm alert en|dis <sw/port> <mac>`: per-switch or per-port alerting for one switch. */
+      readonly action: "deviceToggle";
+      readonly scope: "sw" | "port";
+      readonly mac: string;
+      readonly enabled: boolean;
+    }
+  | { readonly action: "switchShow" | "portShow"; readonly mac: string }
+  | {
+      readonly action: "setSwitch";
+      readonly mac: string;
+      readonly incident: number;
+      readonly level: number;
+    }
+  | {
+      readonly action: "setPort";
+      readonly mac: string;
+      readonly port: number;
+      readonly incident: number;
+      readonly level: number;
+    };
 
 function buildSwmAlertFrames(input: SwmAlertInput): readonly CommandFrame[] {
   switch (input.action) {
@@ -660,7 +591,7 @@ function buildSwmAlertFrames(input: SwmAlertInput): readonly CommandFrame[] {
     }
     case "setName": {
       assertIntegerInRange(input.idx, 1, 8, "idx");
-      assertToken(input.name, "name");
+      assertCliValue(input.name, "name");
 
       return [frameSingleCommand(`swm alert set ${String(input.idx)} name ${input.name}`)];
     }
@@ -690,6 +621,47 @@ function buildSwmAlertFrames(input: SwmAlertInput): readonly CommandFrame[] {
     }
     case "display": {
       return [frameSingleCommand("swm alert display")];
+    }
+    case "deviceToggle": {
+      assertOneOf(input.scope, ["sw", "port"], "scope");
+      assertMac(input.mac, "mac", "colonOrDash");
+
+      return [
+        frameSingleCommand(`swm alert ${input.enabled ? "en" : "dis"} ${input.scope} ${input.mac}`),
+      ];
+    }
+    case "switchShow":
+    case "portShow": {
+      assertMac(input.mac, "mac", "colonOrDash");
+
+      return [
+        frameSingleCommand(
+          `swm alert ${input.action === "switchShow" ? "sw" : "port"} show ${input.mac}`,
+        ),
+      ];
+    }
+    case "setSwitch": {
+      assertMac(input.mac, "mac", "colonOrDash");
+      assertPositiveInteger(input.incident, "incident");
+      assertPositiveInteger(input.level, "level");
+
+      return [
+        frameSingleCommand(
+          `swm alert set sw ${input.mac} ${String(input.incident)} ${String(input.level)}`,
+        ),
+      ];
+    }
+    case "setPort": {
+      assertMac(input.mac, "mac", "colonOrDash");
+      assertPositiveInteger(input.port, "port");
+      assertPositiveInteger(input.incident, "incident");
+      assertPositiveInteger(input.level, "level");
+
+      return [
+        frameSingleCommand(
+          `swm alert set port ${input.mac} ${String(input.port)} ${String(input.incident)} ${String(input.level)}`,
+        ),
+      ];
     }
   }
 }
@@ -743,7 +715,7 @@ function buildSwmLogFrames(input: SwmLogInput): readonly CommandFrame[] {
       ];
     }
     case "setSwitch": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [
         frameSingleCommand(`swm log set switch ${input.mac} ${input.enabled ? "on" : "off"}`),
@@ -778,29 +750,29 @@ export type SwmSnmpInput =
 function buildSwmSnmpFrames(input: SwmSnmpInput): readonly CommandFrame[] {
   switch (input.action) {
     case "sys": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm snmp sys ${input.mac}`)];
     }
     case "iftbl": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
       assertIntegerInRange(input.portNum, 1, 28, "portNum");
 
       return [frameSingleCommand(`swm snmp iftbl ${input.mac} ${String(input.portNum)}`)];
     }
     case "poe": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm snmp poe ${input.mac}`)];
     }
     case "trpcomShow": {
-      assertMac(input.mac, "mac");
+      assertMac(input.mac, "mac", "bare");
 
       return [frameSingleCommand(`swm snmp trpcom show ${input.mac}`)];
     }
     case "trpcomSet": {
-      assertMac(input.mac, "mac");
-      assertToken(input.name, "name");
+      assertMac(input.mac, "mac", "bare");
+      assertCliValue(input.name, "name");
 
       return [frameSingleCommand(`swm snmp trpcom set ${input.mac} ${input.name}`)];
     }
