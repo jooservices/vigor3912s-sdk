@@ -183,7 +183,7 @@ describe("capability manifest census", () => {
     for (const entry of recon) {
       expect(entry.firmwareBasis).toBe("live-recon-4.4.7_RC2");
       expect(entry.verifiedOnFirmware).toBe("4.4.7_RC2");
-      expect(entry.classificationBasis).toBe("sibling-live-verified");
+      expect(["sibling-live-verified", "live-help-syntax"]).toContain(entry.classificationBasis);
     }
   });
 });

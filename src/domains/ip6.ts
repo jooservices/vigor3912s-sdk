@@ -30,8 +30,8 @@
  * each operation.
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseAddr } from "../internal/parsers/ip6/addr.js";
 import { parseMngt } from "../internal/parsers/ip6/mngt.js";
@@ -58,17 +58,21 @@ import { parseLan } from "../internal/parsers/ip6/lan.js";
 import { parseSession } from "../internal/parsers/ip6/session.js";
 import { parseBandwidth } from "../internal/parsers/ip6/bandwidth.js";
 import type { RawCommandOutput } from "../internal/parsers/ip6/shared.js";
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertMac,
+  assertNumberOneOf,
+  assertOneOf,
+  assertPositiveInteger,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 /**
  * `ARCH#Item-3`'s diagnostic exception, hard-coded per operation -- never
  * exposed as a caller-raisable option.
  */
 const DIAGNOSTIC_TIMEOUT_OVERRIDE = { commandTimeoutMs: 60_000 } as const;
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
 
 /**
  * Documented interface labels shared by both `ip6 ping` and `ip6 tracert`
@@ -78,7 +82,9 @@ const INTERFACE_LABEL_PATTERN = /^(LAN([1-9][0-9]?|100)|WAN([1-9]|10))$/;
 
 function assertInterfaceLabel(value: string, name: string): void {
   if (!INTERFACE_LABEL_PATTERN.test(value)) {
-    throw new Error(`${name} must match "LAN1".."LAN100" or "WAN1".."WAN10" (got "${value}").`);
+    throw new InvalidInputError(
+      `${name} must match "LAN1".."LAN100" or "WAN1".."WAN10" (got "${value}").`,
+    );
   }
 }
 
@@ -104,7 +110,7 @@ function assertAddrInterface(value: string, name: string, allowVpn: boolean): vo
 
   const vpnHint = allowVpn ? ', or "VPN1".."VPN500"' : "";
 
-  throw new Error(
+  throw new InvalidInputError(
     `${name} must match "LAN1".."LAN100" or "WAN1".."WAN10"${vpnHint} (got "${value}").`,
   );
 }
@@ -120,23 +126,7 @@ const IPV6_PATTERN =
 
 function assertIpv6(value: string, name: string): void {
   if (!IPV6_PATTERN.test(value)) {
-    throw new Error(`${name} must be a valid IPv6 address (got "${value}").`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  if (!Number.isInteger(value) || value < min || value > max) {
-    throw new Error(
-      `${name} must be an integer between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
-    );
+    throw new InvalidInputError(`${name} must be a valid IPv6 address (got "${value}").`);
   }
 }
 
@@ -166,7 +156,9 @@ function buildPingFrames(input: Ip6PingInput): readonly CommandFrame[] {
 
     if (input.sendCount !== undefined || input.dataSize !== undefined) {
       if (input.sendCount === undefined || input.dataSize === undefined) {
-        throw new Error("sendCount and dataSize must both be provided together, or neither.");
+        throw new InvalidInputError(
+          "sendCount and dataSize must both be provided together, or neither.",
+        );
       }
 
       assertIntegerInRange(input.sendCount, 1, 100, "sendCount");
@@ -174,7 +166,7 @@ function buildPingFrames(input: Ip6PingInput): readonly CommandFrame[] {
       parts.push(String(input.sendCount), String(input.dataSize));
     }
   } else if (input.sendCount !== undefined || input.dataSize !== undefined) {
-    throw new Error("sendCount/dataSize require interfaceLabel to also be provided.");
+    throw new InvalidInputError("sendCount/dataSize require interfaceLabel to also be provided.");
   }
 
   return [frameSingleCommand(`ip6 ping ${parts.join(" ")}`)];
@@ -251,7 +243,69 @@ export type Ip6AddrInput =
   | {
       readonly action: "showPrefix";
       readonly interfaceLabel?: string;
+    }
+  | {
+      /** `-t`: update the WAN static IPv6 address table. */
+      readonly action: "updateStatic";
+      readonly oldPrefix: string;
+      readonly oldPrefixLength: number;
+      readonly newPrefix: string;
+      readonly newPrefixLength: number;
+      readonly interfaceLabel: string;
+    }
+  | {
+      /** `-o 1` show the old prefix list; `-o 2` send the old prefix option by RA. */
+      readonly action: "oldPrefix";
+      readonly mode: 1 | 2;
+    }
+  | {
+      /** `-o 3`: set an old prefix on a WAN. */
+      readonly action: "setOldPrefix";
+      readonly prefix: string;
+      readonly prefixLength: number;
+      readonly wan: string;
+    }
+  | {
+      /** `-l`: add a ULA on a LAN. */
+      readonly action: "addUla";
+      readonly prefix: string;
+      readonly prefixLength: number;
+      readonly lan: string;
+    }
+  | {
+      /** `-p` add / `-b` delete a prefix in a WAN's prefix list. */
+      readonly action: "prefixListAdd" | "prefixListDelete";
+      readonly prefix: string;
+      readonly prefixLength: number;
+      readonly wan: string;
+    }
+  | {
+      /** `-x` generate a ULA automatically / `-c` delete a ULA. */
+      readonly action: "autoUla" | "deleteUla";
+      readonly lan: string;
+    }
+  | {
+      /** `-e`: ULA type 0 disable, 1 static, 2 auto. */
+      readonly action: "ulaType";
+      readonly type: number;
+      readonly lan: string;
     };
+
+const LAN_LABEL = /^LAN([1-9][0-9]?|100)$/;
+const WAN_LABEL = /^WAN([1-9]|10)$/;
+
+function assertLabel(value: string, pattern: RegExp, name: string, expected: string): void {
+  if (!pattern.test(value)) {
+    throw new InvalidInputError(`${name} must be ${expected} (got "${value}").`);
+  }
+}
+
+function prefixArgs(prefix: string, prefixLength: number, name = "prefix"): string {
+  assertIpv6(prefix, name);
+  assertIntegerInRange(prefixLength, 0, 128, `${name}Length`);
+
+  return `${prefix} ${String(prefixLength)}`;
+}
 
 function buildAddrFrames(input: Ip6AddrInput): readonly CommandFrame[] {
   switch (input.action) {
@@ -299,6 +353,61 @@ function buildAddrFrames(input: Ip6AddrInput): readonly CommandFrame[] {
       }
 
       return [frameSingleCommand("ip6 addr -v")];
+    }
+    case "updateStatic": {
+      assertInterfaceLabel(input.interfaceLabel, "interfaceLabel");
+      const oldPart = prefixArgs(input.oldPrefix, input.oldPrefixLength, "oldPrefix");
+      const newPart = prefixArgs(input.newPrefix, input.newPrefixLength, "newPrefix");
+
+      return [frameSingleCommand(`ip6 addr -t ${oldPart} ${newPart} ${input.interfaceLabel}`)];
+    }
+    case "oldPrefix": {
+      assertNumberOneOf(input.mode, [1, 2], "mode");
+
+      return [frameSingleCommand(`ip6 addr -o ${String(input.mode)}`)];
+    }
+    case "setOldPrefix": {
+      assertLabel(input.wan, WAN_LABEL, "wan", "WAN1..WAN10");
+
+      return [
+        frameSingleCommand(
+          `ip6 addr -o 3 ${prefixArgs(input.prefix, input.prefixLength)} ${input.wan}`,
+        ),
+      ];
+    }
+    case "addUla": {
+      assertLabel(input.lan, LAN_LABEL, "lan", "LAN1..LAN100");
+
+      return [
+        frameSingleCommand(
+          `ip6 addr -l ${prefixArgs(input.prefix, input.prefixLength)} ${input.lan}`,
+        ),
+      ];
+    }
+    case "prefixListAdd":
+    case "prefixListDelete": {
+      assertLabel(input.wan, WAN_LABEL, "wan", "WAN1..WAN10");
+      const flag = input.action === "prefixListAdd" ? "-p" : "-b";
+
+      return [
+        frameSingleCommand(
+          `ip6 addr ${flag} ${prefixArgs(input.prefix, input.prefixLength)} ${input.wan}`,
+        ),
+      ];
+    }
+    case "autoUla":
+    case "deleteUla": {
+      assertLabel(input.lan, LAN_LABEL, "lan", "LAN1..LAN100");
+
+      return [
+        frameSingleCommand(`ip6 addr ${input.action === "autoUla" ? "-x" : "-c"} ${input.lan}`),
+      ];
+    }
+    case "ulaType": {
+      assertIntegerInRange(input.type, 0, 2, "type");
+      assertLabel(input.lan, LAN_LABEL, "lan", "LAN1..LAN100");
+
+      return [frameSingleCommand(`ip6 addr -e ${String(input.type)} ${input.lan}`)];
     }
   }
 }
@@ -416,7 +525,7 @@ const WAN_ONLY_PATTERN = /^WAN([1-9]|10)$/;
 
 function assertWanLabel(value: string, name: string): void {
   if (!WAN_ONLY_PATTERN.test(value)) {
-    throw new Error(`${name} must match "WAN1".."WAN10" (got "${value}").`);
+    throw new InvalidInputError(`${name} must match "WAN1".."WAN10" (got "${value}").`);
   }
 }
 
@@ -441,19 +550,13 @@ function buildDhcpClientFrames(input: Ip6DhcpClientInput): readonly CommandFrame
       return [frameSingleCommand(`ip6 dhcp client ${input.wan} -r`)];
     }
     case "requestPd": {
-      assertNonEmptyString(input.iaid, "iaid");
+      assertCliValue(input.iaid, "iaid");
 
       return [frameSingleCommand(`ip6 dhcp client ${input.wan} -p ${input.iaid}`)];
     }
     case "displayDuid": {
       return [frameSingleCommand(`ip6 dhcp client ${input.wan} -d`)];
     }
-  }
-}
-
-function assertNonEmptyString(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
   }
 }
 
@@ -543,7 +646,7 @@ export type Ip6DhcpOptionCInput =
 
 function assertWanNumberList(value: string, name: string): void {
   if (!/^([1-9]|10)(\/([1-9]|10))*$/.test(value)) {
-    throw new Error(
+    throw new InvalidInputError(
       `${name} must be a WAN number or slash-separated list like "1" or "1/2" (got "${value}").`,
     );
   }
@@ -562,7 +665,7 @@ function buildDhcpOptionCFrames(input: Ip6DhcpOptionCInput): readonly CommandFra
     case "setAscii": {
       assertWanNumberList(input.wan, "wan");
       assertIntegerInRange(input.optionNumber, 0, 65_535, "optionNumber");
-      assertNonEmptyString(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [
         frameSingleCommand(
@@ -573,7 +676,7 @@ function buildDhcpOptionCFrames(input: Ip6DhcpOptionCInput): readonly CommandFra
     case "setHex": {
       assertWanNumberList(input.wan, "wan");
       assertIntegerInRange(input.optionNumber, 0, 65_535, "optionNumber");
-      assertNonEmptyString(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [
         frameSingleCommand(
@@ -639,7 +742,7 @@ export type Ip6DhcpOptionSInput =
 
 function assertOptionSLan(value: string): void {
   if (!/^([1-9]\d?|100|a|r)(\/([1-9]\d?|100|a|r))*$/i.test(value)) {
-    throw new Error(
+    throw new InvalidInputError(
       `lan must match LAN numbers/"a"/"r" or a slash-separated list (got "${value}").`,
     );
   }
@@ -658,7 +761,7 @@ function buildDhcpOptionSFrames(input: Ip6DhcpOptionSInput): readonly CommandFra
     case "setHex": {
       assertOptionSLan(input.lan);
       assertIntegerInRange(input.optionNumber, 0, 65_535, "optionNumber");
-      assertNonEmptyString(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [
         frameSingleCommand(
@@ -669,7 +772,7 @@ function buildDhcpOptionSFrames(input: Ip6DhcpOptionSInput): readonly CommandFra
     case "setAscii": {
       assertOptionSLan(input.lan);
       assertIntegerInRange(input.optionNumber, 0, 65_535, "optionNumber");
-      assertNonEmptyString(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [
         frameSingleCommand(
@@ -741,17 +844,17 @@ function buildInternetFrames(input: Ip6InternetInput): readonly CommandFrame[] {
       const parts = [`ip6 internet -W ${String(input.wan)} -M ${String(input.mode)}`];
 
       if (input.username !== undefined) {
-        assertNonEmptyString(input.username, "username");
+        assertCliValue(input.username, "username");
         parts.push(`-u ${input.username}`);
       }
 
       if (input.password !== undefined) {
-        assertNonEmptyString(input.password, "password");
+        assertCliValue(input.password, "password");
         parts.push(`-p ${input.password}`);
       }
 
       if (input.server !== undefined) {
-        assertNonEmptyString(input.server, "server");
+        assertCliValue(input.server, "server");
         parts.push(`-s ${input.server}`);
       }
 
@@ -760,35 +863,12 @@ function buildInternetFrames(input: Ip6InternetInput): readonly CommandFrame[] {
   }
 }
 
-function assertNumberOneOfLocal<T extends number>(
-  value: T,
-  allowed: readonly T[],
-  name: string,
-): void {
-  if (!(allowed as readonly number[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => String(entry)).join(", ")} (got ${String(value)}).`,
-    );
-  }
-}
-
-// Reuse the existing assertOneOf for strings; numeric helper alias for clarity above.
-const assertNumberOneOf = assertNumberOneOfLocal;
-
 export const ip6Internet: TypedOperation<Ip6InternetInput, RawCommandOutput> = {
   manifestId: "cli.ip6.internet",
   classification: "write",
   buildFrames: buildInternetFrames,
   parse: (exchanges) => parseInternet(firstExchangeText(exchanges)),
 };
-
-const MAC_PATTERN = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
-
-function assertMac(value: string, name: string): void {
-  if (!MAC_PATTERN.test(value)) {
-    throw new Error(`${name} must be a MAC address XX:XX:XX:XX:XX:XX (got "${value}").`);
-  }
-}
 
 export interface Ip6NeighAInput {
   readonly address?: string;
@@ -906,7 +986,7 @@ const ROUTE_IF_PATTERN = /^(LAN([1-9][0-9]?|100)|WAN([1-9]|10)|VPN([1-9]\d{0,2}|
 
 function assertRouteInterface(value: string, name: string): void {
   if (!ROUTE_IF_PATTERN.test(value)) {
-    throw new Error(
+    throw new InvalidInputError(
       `${name} must match "LAN1".."LAN100", "WAN1".."WAN10", or "VPN1".."VPN500" (got "${value}").`,
     );
   }
@@ -997,7 +1077,7 @@ const LAN_ONLY_PATTERN = /^LAN([1-9][0-9]?|100)$/;
 
 function assertLanLabel(value: string, name: string): void {
   if (!LAN_ONLY_PATTERN.test(value)) {
-    throw new Error(`${name} must match "LAN1".."LAN100" (got "${value}").`);
+    throw new InvalidInputError(`${name} must match "LAN1".."LAN100" (got "${value}").`);
   }
 }
 
@@ -1126,6 +1206,18 @@ export type Ip6LanInput =
       readonly otherOption?: boolean;
       readonly disableIpv6?: boolean;
       readonly showLan?: number;
+      /** `-D` 2nd DNS server (IPv6). */
+      readonly dns2?: string;
+      /** `-m` LAN management: 0 OFF, 1 SLAAC, 2 DHCPv6. */
+      readonly management?: number;
+      /** `-e` add an extension WAN (1..10). */
+      readonly addExtensionWan?: number;
+      /** `-E` delete an extension WAN (1..10). */
+      readonly deleteExtensionWan?: number;
+      /** `-b` extension-WAN bit map (decimal). */
+      readonly extensionWanBitmap?: number;
+      /** `-R` RIPng on/off. */
+      readonly ripng?: boolean;
     }
   | { readonly action: "show"; readonly lan?: number };
 
@@ -1152,6 +1244,35 @@ function buildLanFrames(input: Ip6LanInput): readonly CommandFrame[] {
   if (input.dns1 !== undefined) {
     assertIpv6(input.dns1, "dns1");
     parts.push(`-d ${input.dns1}`);
+  }
+
+  if (input.dns2 !== undefined) {
+    assertIpv6(input.dns2, "dns2");
+    parts.push(`-D ${input.dns2}`);
+  }
+
+  if (input.management !== undefined) {
+    assertIntegerInRange(input.management, 0, 2, "management");
+    parts.push(`-m ${String(input.management)}`);
+  }
+
+  if (input.addExtensionWan !== undefined) {
+    assertIntegerInRange(input.addExtensionWan, 1, 10, "addExtensionWan");
+    parts.push(`-e ${String(input.addExtensionWan)}`);
+  }
+
+  if (input.deleteExtensionWan !== undefined) {
+    assertIntegerInRange(input.deleteExtensionWan, 1, 10, "deleteExtensionWan");
+    parts.push(`-E ${String(input.deleteExtensionWan)}`);
+  }
+
+  if (input.extensionWanBitmap !== undefined) {
+    assertIntegerInRange(input.extensionWanBitmap, 0, 1023, "extensionWanBitmap");
+    parts.push(`-b ${String(input.extensionWanBitmap)}`);
+  }
+
+  if (input.ripng !== undefined) {
+    parts.push(`-R ${input.ripng ? "1" : "0"}`);
   }
 
   if (input.otherOption !== undefined) {
@@ -1233,12 +1354,6 @@ function buildSessionFrames(input: Ip6SessionInput): readonly CommandFrame[] {
   }
 }
 
-function assertPositiveInteger(value: number, name: string): void {
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(value)}).`);
-  }
-}
-
 export const ip6Session: TypedOperation<Ip6SessionInput, RawCommandOutput> = {
   manifestId: "cli.ip6.session",
   classification: "write",
@@ -1266,7 +1381,9 @@ export type Ip6BandwidthInput =
 
 function assertBandwidthRateToken(value: string, name: string): void {
   if (!/^\d+[KkMm]?$/.test(value)) {
-    throw new Error(`${name} must be a numeric rate token like "512" or "5M" (got "${value}").`);
+    throw new InvalidInputError(
+      `${name} must be a numeric rate token like "512" or "5M" (got "${value}").`,
+    );
   }
 }
 

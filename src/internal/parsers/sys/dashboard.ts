@@ -8,10 +8,8 @@
  * section status text -- return the trimmed raw text (YAGNI).
  */
 
-export interface SysDashboard {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseSysDashboard(text: string): SysDashboard {
-  return { raw: text.trim() };
-}
+export type SysDashboard = RawCommandOutput;
+
+export const parseSysDashboard: (text: string) => SysDashboard = parseRawText;

@@ -8,10 +8,4 @@
  * (column widths/row counts vary by device) worth a bespoke DTO here.
  */
 
-export interface RawCommandOutput {
-  readonly raw: string;
-}
-
-export function parseRawText(text: string): RawCommandOutput {
-  return { raw: text.trim() };
-}
+export { parseRawText, type RawCommandOutput } from "../raw-text.js";

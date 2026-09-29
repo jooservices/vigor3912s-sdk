@@ -27,7 +27,7 @@ describe("cli.linux.service.ssh.setport operation", () => {
     for (const port of [0, -1, 65536, 1.5, Number.NaN]) {
       expect(() =>
         operation.buildFrames({ port } satisfies ServiceSshSetportInput as never),
-      ).toThrow(/port must be an integer between 1 and 65535/);
+      ).toThrow(/port must (be between 1 and 65535|be an integer)/);
     }
   });
 

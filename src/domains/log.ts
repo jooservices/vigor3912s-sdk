@@ -15,8 +15,8 @@
  * `internal/parsers/log/*.ts`.
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseC } from "../internal/parsers/log/c.js";
 import { parseF } from "../internal/parsers/log/f.js";
@@ -27,11 +27,7 @@ import { parseT } from "../internal/parsers/log/t.js";
 import { parseW } from "../internal/parsers/log/w.js";
 import { parseX } from "../internal/parsers/log/x.js";
 import type { RawCommandOutput } from "../internal/parsers/log/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
+import { firstExchangeText } from "../internal/domain-support.js";
 
 /**
  * Local construction helper for this family's uniform zero-argument reads
@@ -61,7 +57,7 @@ export interface LogFlushInput {
 
 function assertFlushTarget(value: string): asserts value is LogFlushTarget {
   if (!(FLUSH_TARGETS as readonly string[]).includes(value)) {
-    throw new Error(
+    throw new InvalidInputError(
       `target must be one of ${FLUSH_TARGETS.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
     );
   }

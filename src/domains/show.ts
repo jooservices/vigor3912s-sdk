@@ -13,6 +13,7 @@
  * tests).
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand } from "../internal/execution/framing.js";
 import type { CommandExchange } from "../internal/execution/transport.js";
 import { parseShowClientTraffic } from "../internal/parsers/show/clienttraffic.js";
@@ -35,6 +36,12 @@ import { parseShowStatus } from "../internal/parsers/show/status.js";
 import { parseShowTraffic } from "../internal/parsers/show/traffic.js";
 import { parseShowVoip } from "../internal/parsers/show/voip.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
+import {
+  assertIntegerInRange,
+  assertIpv4,
+  assertOneOf,
+  defineRawOperation,
+} from "../internal/domain-support.js";
 
 /** Reads the first exchange's `stdout`, tolerating a missing/malformed exchange. */
 function firstStdout(exchanges: readonly unknown[]): string {
@@ -62,6 +69,137 @@ function defineOperation<TOutput>(options: {
     parse: (exchanges) => options.parse(firstStdout(exchanges)),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Sub-form completion (S8): parameterised `show traffic` / `show
+// clienttraffic` graphs and `show statistic reset` (rawLine 6905-6947).
+// ---------------------------------------------------------------------------
+
+const TRAFFIC_DIRECTIONS = ["tx", "rx"] as const;
+
+export interface ShowTrafficWanInput {
+  /** `wan1`..`wan7`. */
+  readonly wan: string;
+  readonly direction: (typeof TRAFFIC_DIRECTIONS)[number];
+  /** Weekly graph instead of the default. */
+  readonly weekly?: boolean;
+}
+
+export const showTrafficWan = defineRawOperation<ShowTrafficWanInput>(
+  "cli.show.traffic.wan",
+  "read",
+  (input) => {
+    if (!/^wan[1-7]$/.test(input.wan)) {
+      throw new InvalidInputError(`wan must be "wan1".."wan7" (got "${input.wan}").`);
+    }
+
+    assertOneOf(input.direction, TRAFFIC_DIRECTIONS, "direction");
+    return `show traffic ${input.wan} ${input.direction}${input.weekly === true ? " weekly" : ""}`;
+  },
+);
+
+export interface ShowTrafficIpInput {
+  readonly ipv4Address: string;
+  readonly direction: (typeof TRAFFIC_DIRECTIONS)[number];
+}
+
+export const showTrafficIp = defineRawOperation<ShowTrafficIpInput>(
+  "cli.show.traffic.ip",
+  "read",
+  (input) => {
+    assertIpv4(input.ipv4Address, "ipv4Address");
+    assertOneOf(input.direction, TRAFFIC_DIRECTIONS, "direction");
+    return `show traffic ${input.ipv4Address} ${input.direction}`;
+  },
+);
+
+export interface ShowTrafficSessionInput {
+  readonly weekly?: boolean;
+}
+
+export const showTrafficSession = defineRawOperation<ShowTrafficSessionInput>(
+  "cli.show.traffic.session",
+  "read",
+  (input) => `show traffic session${input.weekly === true ? " weekly" : ""}`,
+);
+
+export interface ShowTrafficIpStatsInput {
+  /** Omitted: show the setting; 1/0 enable/disable per-IP traffic statistics. */
+  readonly enabled?: boolean;
+}
+
+export const showTrafficIpStats = defineRawOperation<ShowTrafficIpStatsInput>(
+  "cli.show.traffic.ipstats",
+  "write",
+  (input) =>
+    input.enabled === undefined
+      ? "show traffic ip"
+      : `show traffic ip ${input.enabled ? "1" : "0"}`,
+);
+
+export interface ShowClientTrafficDeviceInput {
+  /** External device (VigorSwitch) index 1..30, sent as two digits. */
+  readonly deviceIndex: number;
+  /** `WAN1`, `WAN2`, `LANA` or `LANB`. */
+  readonly interfaceLabel: string;
+  readonly direction: (typeof TRAFFIC_DIRECTIONS)[number];
+  readonly weekly?: boolean;
+}
+
+export const showClientTrafficDevice = defineRawOperation<ShowClientTrafficDeviceInput>(
+  "cli.show.clienttraffic.device",
+  "read",
+  (input) => {
+    assertIntegerInRange(input.deviceIndex, 1, 30, "deviceIndex");
+    assertOneOf(input.interfaceLabel, ["WAN1", "WAN2", "LANA", "LANB"], "interfaceLabel");
+    assertOneOf(input.direction, TRAFFIC_DIRECTIONS, "direction");
+    const index = String(input.deviceIndex).padStart(2, "0");
+
+    return `show clienttraffic ${index} ${input.interfaceLabel} ${input.direction}${input.weekly === true ? " weekly" : ""}`;
+  },
+);
+
+export interface ShowStatisticResetInput {
+  /** `WAN1`..`WAN12`. */
+  readonly interfaceLabel: string;
+}
+
+/** Resets one WAN's transmitted/received byte counters to zero. */
+export const showStatisticReset = defineRawOperation<ShowStatisticResetInput>(
+  "cli.show.statistic.reset",
+  "write",
+  (input) => {
+    if (!/^WAN([1-9]|1[0-2])$/.test(input.interfaceLabel)) {
+      throw new InvalidInputError(
+        `interfaceLabel must be "WAN1".."WAN12" (got "${input.interfaceLabel}").`,
+      );
+    }
+
+    return `show statistic reset ${input.interfaceLabel}`;
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Live-firmware-recon operations (fw 4.4.7_RC2 `?` help, owner capture in
+// `references/live-help-fw-4.4.7_RC2.txt`); absent from the Part VIII PDF.
+// ---------------------------------------------------------------------------
+
+export interface ShowPingInput {
+  /** `wan1`..`wan12`; omitted shows every WAN. */
+  readonly wan?: string;
+  /** Daily graph. */
+  readonly daily?: boolean;
+}
+
+export const showPing = defineRawOperation<ShowPingInput>("cli.show.ping", "read", (input) => {
+  if (input.wan !== undefined && !/^wan([1-9]|1[0-2])$/.test(input.wan)) {
+    throw new InvalidInputError(`wan must match "wan1".."wan12" (got "${input.wan}").`);
+  }
+
+  return ["show ping", input.wan, input.daily === true ? "daily" : undefined]
+    .filter((part) => part !== undefined)
+    .join(" ");
+});
 
 export const operations: readonly TypedOperation<never, unknown>[] = [
   defineOperation({
@@ -159,4 +297,11 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
     command: "show qryrdsl",
     parse: parseShowQryrdsl,
   }),
+  showTrafficWan,
+  showTrafficIp,
+  showTrafficSession,
+  showTrafficIpStats,
+  showClientTrafficDevice,
+  showStatisticReset,
+  showPing,
 ];

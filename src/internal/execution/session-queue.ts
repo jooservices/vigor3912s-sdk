@@ -23,7 +23,8 @@ function sessionClosedError(): Vigor3912SError {
   );
 }
 
-function toAbortError(reason: unknown): Error {
+/** The error a caller's abort surfaces as (its own reason when it is an `Error`). */
+export function toAbortError(reason: unknown): Error {
   if (reason instanceof Error) {
     return reason;
   }

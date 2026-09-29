@@ -11,7 +11,8 @@ export interface VigbrgWanManagementStatus {
 }
 
 export interface VigbrgStatusReport {
-  readonly functionEnabled: boolean;
+  /** `null` when the function state line is missing. */
+  readonly functionEnabled: boolean | null;
   readonly wanManagement: readonly VigbrgWanManagementStatus[];
 }
 
@@ -20,7 +21,8 @@ const WAN_MANAGEMENT_PATTERN = /Wan(\d+) management is (enable|disable)/gi;
 
 export function parseStatus(text: string): VigbrgStatusReport {
   const functionMatch = FUNCTION_PATTERN.exec(text);
-  const functionEnabled = functionMatch?.[1]?.toLowerCase() === "enable";
+  const state = functionMatch?.[1]?.toLowerCase();
+  const functionEnabled = state === undefined ? null : state === "enable";
 
   const wanManagement: VigbrgWanManagementStatus[] = [];
 

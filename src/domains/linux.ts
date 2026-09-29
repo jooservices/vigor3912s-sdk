@@ -33,7 +33,6 @@
  */
 
 import { frameSingleCommand } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import { parseCleanA } from "../internal/parsers/linux/clean-a.js";
 import { parseCleanB } from "../internal/parsers/linux/clean-b.js";
 import { parseCleanD } from "../internal/parsers/linux/clean-d.js";
@@ -59,6 +58,11 @@ import { parseSyslogDisable } from "../internal/parsers/linux/syslog-disable.js"
 import { parseSyslogEnable } from "../internal/parsers/linux/syslog-enable.js";
 import { parseSyslogStatus } from "../internal/parsers/linux/syslog-status.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // Shared, local (non-shared-file) validation helpers.
@@ -72,26 +76,6 @@ import type { TypedOperation } from "../internal/registry/operation.js";
 // duplicated logic here.
 // ---------------------------------------------------------------------------
 
-function assertNonEmptyToken(value: string, label: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${label} must not be empty or whitespace-only.`);
-  }
-  if (/\s/.test(value)) {
-    throw new Error(`${label} must not contain whitespace.`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, label: string): void {
-  if (!Number.isInteger(value) || value < min || value > max) {
-    throw new Error(`${label} must be an integer between ${String(min)} and ${String(max)}.`);
-  }
-}
-
-function firstExchangeStdout(exchanges: readonly unknown[]): string {
-  const first = exchanges[0] as CommandExchange | undefined;
-  return first?.stdout ?? "";
-}
-
 // ---------------------------------------------------------------------------
 // `linux status` — read, no argument. `liveReadOnlyAllowlist` id.
 // ---------------------------------------------------------------------------
@@ -100,7 +84,7 @@ const linuxStatus: TypedOperation<void, LinuxStatusResult> = {
   manifestId: "cli.linux.status",
   classification: "read",
   buildFrames: () => [frameSingleCommand("linux status")],
-  parse: (exchanges) => parseLinuxStatus(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseLinuxStatus(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -123,7 +107,7 @@ const setLinuxIp: TypedOperation<SetLinuxIpInput, LinuxAck> = {
   manifestId: "cli.linux.setlinuxip",
   classification: "write",
   buildFrames: (input) => {
-    assertNonEmptyToken(input.ip, "linux setlinuxip IP");
+    assertCliValue(input.ip, "linux setlinuxip IP");
 
     const parts = ["linux", "setlinuxip", "-i", input.ip];
 
@@ -133,7 +117,7 @@ const setLinuxIp: TypedOperation<SetLinuxIpInput, LinuxAck> = {
     }
 
     if (input.gateway !== undefined) {
-      assertNonEmptyToken(input.gateway, "linux setlinuxip gateway");
+      assertCliValue(input.gateway, "linux setlinuxip gateway");
       parts.push("-g", input.gateway);
     }
 
@@ -146,7 +130,7 @@ const setLinuxIp: TypedOperation<SetLinuxIpInput, LinuxAck> = {
     }
 
     if (input.password !== undefined) {
-      assertNonEmptyToken(input.password, "linux setlinuxip password");
+      assertCliValue(input.password, "linux setlinuxip password");
       // Real, necessary argument -- must appear in the frame (see module doc
       // comment). Never echoed anywhere else: `assertNonEmptyToken` above
       // only interpolates the field label, never `input.password` itself.
@@ -155,7 +139,7 @@ const setLinuxIp: TypedOperation<SetLinuxIpInput, LinuxAck> = {
 
     return [frameSingleCommand(parts.join(" "))];
   },
-  parse: (exchanges) => parseSetLinuxIp(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSetLinuxIp(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -166,21 +150,21 @@ const serviceSshEnable: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.service.ssh.enable",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux service ssh enable")],
-  parse: (exchanges) => parseServiceSshEnable(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseServiceSshEnable(firstExchangeText(exchanges)),
 };
 
 const serviceSshDisable: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.service.ssh.disable",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux service ssh disable")],
-  parse: (exchanges) => parseServiceSshDisable(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseServiceSshDisable(firstExchangeText(exchanges)),
 };
 
 const serviceSshStatus: TypedOperation<void, LinuxToggleStatus> = {
   manifestId: "cli.linux.service.ssh.status",
   classification: "read",
   buildFrames: () => [frameSingleCommand("linux service ssh status")],
-  parse: (exchanges) => parseServiceSshStatus(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseServiceSshStatus(firstExchangeText(exchanges)),
 };
 
 export interface ServiceSshSetportInput {
@@ -194,7 +178,7 @@ const serviceSshSetport: TypedOperation<ServiceSshSetportInput, LinuxAck> = {
     assertIntegerInRange(input.port, 1, 65535, "linux service ssh setport port");
     return [frameSingleCommand(`linux service ssh setport ${String(input.port)}`)];
   },
-  parse: (exchanges) => parseServiceSshSetport(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseServiceSshSetport(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -205,21 +189,21 @@ const syslogEnable: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.syslog.enable",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux syslog enable")],
-  parse: (exchanges) => parseSyslogEnable(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSyslogEnable(firstExchangeText(exchanges)),
 };
 
 const syslogDisable: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.syslog.disable",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux syslog disable")],
-  parse: (exchanges) => parseSyslogDisable(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSyslogDisable(firstExchangeText(exchanges)),
 };
 
 const syslogStatus: TypedOperation<void, LinuxToggleStatus> = {
   manifestId: "cli.linux.syslog.status",
   classification: "read",
   buildFrames: () => [frameSingleCommand("linux syslog status")],
-  parse: (exchanges) => parseSyslogStatus(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseSyslogStatus(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -232,21 +216,21 @@ const cleanA: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.clean.a",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux clean -a")],
-  parse: (exchanges) => parseCleanA(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseCleanA(firstExchangeText(exchanges)),
 };
 
 const cleanB: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.clean.b",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux clean -b")],
-  parse: (exchanges) => parseCleanB(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseCleanB(firstExchangeText(exchanges)),
 };
 
 const cleanD: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.clean.d",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux clean -d")],
-  parse: (exchanges) => parseCleanD(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseCleanD(firstExchangeText(exchanges)),
 };
 
 // `linux clean -o` — destructive.
@@ -254,7 +238,7 @@ const cleanO: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.clean.o",
   classification: "destructive",
   buildFrames: () => [frameSingleCommand("linux clean -o")],
-  parse: (exchanges) => parseCleanO(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseCleanO(firstExchangeText(exchanges)),
 };
 
 // `linux clean -w` — destructive.
@@ -262,7 +246,7 @@ const cleanW: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.clean.w",
   classification: "destructive",
   buildFrames: () => [frameSingleCommand("linux clean -w")],
-  parse: (exchanges) => parseCleanW(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseCleanW(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -273,21 +257,21 @@ export const linuxServiceTelnetEnable: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.service.telnet.enable",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux service telnet enable")],
-  parse: (exchanges) => parseServiceTelnetEnable(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseServiceTelnetEnable(firstExchangeText(exchanges)),
 };
 
 export const linuxServiceTelnetDisable: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.service.telnet.disable",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux service telnet disable")],
-  parse: (exchanges) => parseServiceTelnetDisable(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseServiceTelnetDisable(firstExchangeText(exchanges)),
 };
 
 export const linuxServiceTelnetStatus: TypedOperation<void, LinuxToggleStatus> = {
   manifestId: "cli.linux.service.telnet.status",
   classification: "read",
   buildFrames: () => [frameSingleCommand("linux service telnet status")],
-  parse: (exchanges) => parseServiceTelnetStatus(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseServiceTelnetStatus(firstExchangeText(exchanges)),
 };
 
 export interface ServiceTelnetSetportInput {
@@ -302,7 +286,7 @@ export const linuxServiceTelnetSetport: TypedOperation<ServiceTelnetSetportInput
 
     return [frameSingleCommand(`linux service telnet setport ${String(input.port)}`)];
   },
-  parse: (exchanges) => parseServiceTelnetSetport(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseServiceTelnetSetport(firstExchangeText(exchanges)),
 };
 
 // ---------------------------------------------------------------------------
@@ -314,35 +298,35 @@ export const linuxRingSet: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.ring.set",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux ring set")],
-  parse: (exchanges) => parseRingSet(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseRingSet(firstExchangeText(exchanges)),
 };
 
 export const linuxRingSend: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.ring.send",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux ring send")],
-  parse: (exchanges) => parseRingSend(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseRingSend(firstExchangeText(exchanges)),
 };
 
 export const linuxRingClean: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.ring.clean",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux ring clean")],
-  parse: (exchanges) => parseRingClean(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseRingClean(firstExchangeText(exchanges)),
 };
 
 export const linuxRingTest: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.ring.test",
   classification: "write",
   buildFrames: () => [frameSingleCommand("linux ring test")],
-  parse: (exchanges) => parseRingTest(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseRingTest(firstExchangeText(exchanges)),
 };
 
 export const linuxRingDebug: TypedOperation<void, LinuxAck> = {
   manifestId: "cli.linux.ring.debug",
   classification: "read",
   buildFrames: () => [frameSingleCommand("linux ring debug")],
-  parse: (exchanges) => parseRingDebug(firstExchangeStdout(exchanges)),
+  parse: (exchanges) => parseRingDebug(firstExchangeText(exchanges)),
 };
 
 export const operations: readonly TypedOperation<never, unknown>[] = [

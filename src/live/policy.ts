@@ -1,6 +1,5 @@
 /**
- * Declarative transport/session policy shapes for the future live read-only
- * client.
+ * Declarative transport/session policy shapes for `LiveReadOnlyClient`.
  *
  * Type-only design intent (per `ARCHITECTURE.md` "Item 4 — transport/session
  * policy and `LiveReadOnlyClient`"): unsafe values are made unrepresentable
@@ -18,14 +17,18 @@
  * elsewhere.
  *
  * This module is pure data/types: no connection, transport, or execution
- * logic. It does not implement `LiveReadOnlyClient` (Item 4 / Wave 3 E3) or
- * the allowlist (Wave 3 E2).
+ * logic.
  */
 
 export interface TransportPolicy {
   /** LAN-only (operations.md safety rule); not configurable. */
   readonly allowedHostKinds: readonly ["private-lan"];
   readonly port: number;
+  /**
+   * @deprecated Not enforced by the SDK: the injected transport owns
+   * connecting, so it must apply its own connect timeout. Kept only for
+   * compatibility; slated for removal in the next major version.
+   */
   readonly connectTimeoutMs: number;
   /** Never allowed; not configurable. */
   readonly allowAgentForwarding: false;
@@ -62,7 +65,7 @@ export const defaultTransportPolicy: TransportPolicy = {
  * - `idleTimeoutMs: 5_000` — matches the approved `execute()` envelope's
  *   `idleTimeoutMs` (Item 3): no new output bytes for 5s ends the exchange.
  * - `maxSessionMs: 300_000` (5 minutes) — a conservative overall session cap
- *   for the future read-only client; well above any single bounded command
+ *   for the read-only client; well above any single bounded command
  *   exchange (15s) or the `ip ping`/`ip tracert` diagnostic ceiling (60s), but
  *   short enough that a stuck or forgotten LAN session cannot run unbounded.
  */

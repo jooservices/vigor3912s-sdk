@@ -1,5 +1,13 @@
 {
   "compilerOptions": {
+    // `tools/manifest/*.ts` are sibling `.ts` files imported by
+    // `tools/generate-capability-manifest.ts` via a literal `.ts` relative
+    // specifier (never compiled to `dist/`, so `node
+    // --experimental-strip-types` needs the real extension to resolve it —
+    // see that import's comment). Only valid alongside `noEmit`/
+    // `emitDeclarationOnly`, which is why `tsconfig.build.json` (real `src/`
+    // emit, `tools/` excluded) turns this back off below.
+    "allowImportingTsExtensions": true,
     "declaration": true,
     "declarationMap": true,
     "exactOptionalPropertyTypes": true,

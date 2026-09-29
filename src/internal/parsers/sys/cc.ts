@@ -9,8 +9,9 @@
  */
 
 export interface SysCc {
-  readonly countryCode: string;
-  readonly wirelessRegionCode: string;
+  /** `null` when the line is missing from the output. */
+  readonly countryCode: string | null;
+  readonly wirelessRegionCode: string | null;
 }
 
 const COUNTRY_PATTERN = /Country Code\s*:\s*(?<countryCode>.+?)\s*$/m;
@@ -21,7 +22,7 @@ export function parseSysCc(text: string): SysCc {
   const regionMatch = REGION_PATTERN.exec(text);
 
   return {
-    countryCode: countryMatch?.groups?.countryCode ?? "",
-    wirelessRegionCode: regionMatch?.groups?.wirelessRegionCode ?? "",
+    countryCode: countryMatch?.groups?.countryCode ?? null,
+    wirelessRegionCode: regionMatch?.groups?.wirelessRegionCode ?? null,
   };
 }

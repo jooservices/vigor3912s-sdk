@@ -10,12 +10,13 @@
  */
 
 export interface LdapViewReport {
-  readonly enabled: boolean;
-  readonly bindType: string;
-  readonly sslEnabled: boolean;
-  readonly regularDn: string;
-  readonly regularPassword: string;
-  readonly serverIp: string;
+  /** Each field is `null` when its line is missing (or, for the port, not a number). */
+  readonly enabled: boolean | null;
+  readonly bindType: string | null;
+  readonly sslEnabled: boolean | null;
+  readonly regularDn: string | null;
+  readonly regularPassword: string | null;
+  readonly serverIp: string | null;
   readonly serverPort: number | null;
 }
 
@@ -29,10 +30,14 @@ const LINE_PATTERNS = {
   serverPort: /^LDAP Server Port:(.*)$/m,
 } as const;
 
-function extract(text: string, pattern: RegExp): string {
+function extract(text: string, pattern: RegExp): string | null {
   const match = pattern.exec(text);
 
-  return match?.[1]?.trim() ?? "";
+  return match?.[1]?.trim() ?? null;
+}
+
+function enabledFlag(text: string | null): boolean | null {
+  return text === null ? null : text.toLowerCase().startsWith("enabled");
 }
 
 export function parseLdapView(text: string): LdapViewReport {
@@ -41,12 +46,12 @@ export function parseLdapView(text: string): LdapViewReport {
   const portText = extract(text, LINE_PATTERNS.serverPort);
 
   return {
-    enabled: enabledText.toLowerCase().startsWith("enabled"),
+    enabled: enabledFlag(enabledText),
     bindType: extract(text, LINE_PATTERNS.bindType),
-    sslEnabled: sslText.toLowerCase().startsWith("enabled"),
+    sslEnabled: enabledFlag(sslText),
     regularDn: extract(text, LINE_PATTERNS.regularDn),
     regularPassword: extract(text, LINE_PATTERNS.regularPassword),
     serverIp: extract(text, LINE_PATTERNS.serverIp),
-    serverPort: portText.length > 0 ? Number(portText) : null,
+    serverPort: portText !== null && /^\d+$/.test(portText) ? Number(portText) : null,
   };
 }

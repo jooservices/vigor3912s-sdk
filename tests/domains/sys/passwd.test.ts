@@ -33,7 +33,7 @@ describe("sys passwd <old> <new>", () => {
       operation.buildFrames({ oldPassword: "x".repeat(84), newPassword: "new-pw" }),
     ).toThrow(/at most 83 characters/);
     expect(() => operation.buildFrames({ oldPassword: "old-pw", newPassword: "new$(id)" })).toThrow(
-      /disallowed sequence/,
+      /shell metacharacters/,
     );
   });
 
