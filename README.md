@@ -13,16 +13,24 @@ injection contract. The package does **not** open SSH sessions and does
 
 ## Status
 
-**v1.0.0.** The package stays `"private": true` and is not published to npm;
+**v2.0.0.** The package stays `"private": true` and is not published to npm;
 consume it from the checkout or a Git tag. See [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Features
 
-- Typed CLI operations for every implementable DrayOS command (472 ops /
+- Typed CLI operations for every implementable DrayOS command (640 ops /
   42 families); blocked entries carry documented reasons
+- Typed, validated **input** for every operation; **output** is structured
+  only where DrayOS documents a response shape (42 of 208 read operations).
+  The rest return `{ raw }` (trimmed text) rather than an invented DTO, and a
+  structured field the output lacks is `null`, never a guessed value
 - `Vigor3912SClient.execute()` / `.invoke()` over an injected runner or
   `fromTransport(transport)`
-- Public subpaths: `./operations`, `./transport`, `./live`
+- Public subpaths: `./operations`, `./schemas`, `./transport`, `./live`
+- `./schemas`: generated JSON Schema for every implemented operation's input,
+  keyed by `manifestId` — lets a downstream consumer (e.g. an MCP server)
+  build tool argument schemas without depending on this SDK's TypeScript
+  `TInput` types at runtime
 - Classification is metadata only — write policy belongs to the consumer
 - Global unit coverage gate ≥ 90%
 
@@ -36,13 +44,13 @@ consume it from the checkout or a Git tag. See [`CHANGELOG.md`](./CHANGELOG.md).
 Not published to npm. Install from GitHub (pin a tag or branch):
 
 ```bash
-npm install github:jooservices/vigor3912s-sdk#v1.0.0
+npm install github:jooservices/vigor3912s-sdk#v2.0.0
 ```
 
 ```json
 {
   "dependencies": {
-    "@jooservices/vigor3912s-sdk": "github:jooservices/vigor3912s-sdk#v1.0.0"
+    "@jooservices/vigor3912s-sdk": "github:jooservices/vigor3912s-sdk#v2.0.0"
   }
 }
 ```

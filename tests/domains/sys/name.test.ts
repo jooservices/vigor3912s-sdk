@@ -33,7 +33,7 @@ describe("sys name <wan1/wan2> <name|clear>", () => {
       /at most 20 characters/,
     );
     expect(() => operation.buildFrames({ wan: "wan1", value: "a`whoami`" })).toThrow(
-      /disallowed sequence/,
+      /shell metacharacters/,
     );
   });
 

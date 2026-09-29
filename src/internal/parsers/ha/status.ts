@@ -12,10 +12,8 @@
  * returns the trimmed raw text, a real (if minimal) transform.
  */
 
-export interface HaStatus {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseHaStatus(text: string): HaStatus {
-  return { raw: text.trim() };
-}
+export type HaStatus = RawCommandOutput;
+
+export const parseHaStatus: (text: string) => HaStatus = parseRawText;

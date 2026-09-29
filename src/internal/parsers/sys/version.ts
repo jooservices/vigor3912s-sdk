@@ -13,20 +13,21 @@
  * ```
  */
 
+/** Each field is `null` when its label is missing from the output. */
 export interface SysVersion {
-  readonly routerModel: string;
-  readonly version: string;
-  readonly profileVersion: string;
-  readonly status: string;
-  readonly routerIp: string;
-  readonly netmask: string;
-  readonly firmwareBuildDateTime: string;
-  readonly routerName: string;
-  readonly revision: string;
+  readonly routerModel: string | null;
+  readonly version: string | null;
+  readonly profileVersion: string | null;
+  readonly status: string | null;
+  readonly routerIp: string | null;
+  readonly netmask: string | null;
+  readonly firmwareBuildDateTime: string | null;
+  readonly routerName: string | null;
+  readonly revision: string | null;
 }
 
-function extract(text: string, pattern: RegExp): string {
-  return pattern.exec(text)?.groups?.value?.trim() ?? "";
+function extract(text: string, pattern: RegExp): string | null {
+  return pattern.exec(text)?.groups?.value?.trim() ?? null;
 }
 
 export function parseSysVersion(text: string): SysVersion {

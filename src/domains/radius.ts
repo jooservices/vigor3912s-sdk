@@ -18,8 +18,8 @@
  * `internal/parsers/radius/*.ts`.
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseShow } from "../internal/parsers/radius/show.js";
 import { parseEnable } from "../internal/parsers/radius/enable.js";
@@ -35,76 +35,15 @@ import { parseExternalLog } from "../internal/parsers/radius/external-log.js";
 import { parseExternal } from "../internal/parsers/radius/external.js";
 import { parseShowLocalCer } from "../internal/parsers/radius/showlocalcer.js";
 import type { RawCommandOutput } from "../internal/parsers/radius/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertNumberOneOf<T extends number>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly number[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => String(entry)).join(", ")} (got ${String(value)}).`,
-    );
-  }
-}
-
-const SINGLE_CLI_TOKEN_PATTERN = /^\S+$/;
-
-function assertSingleToken(value: string, name: string): void {
-  // Never interpolate `value` into the message — callers use this for shared
-  // secrets; echoing rejected secrets would leak into Error.message.
-  if (!SINGLE_CLI_TOKEN_PATTERN.test(value)) {
-    throw new Error(`${name} must be a single non-empty token with no whitespace.`);
-  }
-}
-
-function assertNonEmptyToken(value: string, label: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${label} must not be empty or whitespace-only.`);
-  }
-  if (/\s/.test(value)) {
-    throw new Error(`${label} must not contain whitespace.`);
-  }
-}
-
-function assertArgsShape(args: readonly string[], label: string): void {
-  if (args.length === 0) {
-    throw new Error(`${label} requires at least one argument token.`);
-  }
-  for (const [index, token] of args.entries()) {
-    assertNonEmptyToken(token, `${label} argument #${String(index + 1)}`);
-  }
-}
-
-function assertKnownFlags(
-  args: readonly string[],
-  allowedFlags: readonly string[],
-  label: string,
-): void {
-  for (const token of args) {
-    if (token.startsWith("-") && !allowedFlags.includes(token)) {
-      throw new Error(
-        `${label} flag "${token}" is not one of the documented flags: ${allowedFlags.join(", ")}.`,
-      );
-    }
-  }
-}
+import {
+  assertArgsShape,
+  assertCliValue,
+  assertInteger,
+  assertIntegerInRange,
+  assertKnownFlags,
+  assertNumberOneOf,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.radius.show -- `radius show` (rawLine 11570) -- read
@@ -201,15 +140,15 @@ function buildClientAddFrames(input: RadiusClientAddInput): readonly CommandFram
   const parts: string[] = ["radius", "client", "add", String(input.index)];
 
   if (input.ipv4Address !== undefined) {
-    assertSingleToken(input.ipv4Address, "ipv4Address");
+    assertCliValue(input.ipv4Address, "ipv4Address");
     parts.push(`-i ${input.ipv4Address}`);
   }
   if (input.ipv4Mask !== undefined) {
-    assertSingleToken(input.ipv4Mask, "ipv4Mask");
+    assertCliValue(input.ipv4Mask, "ipv4Mask");
     parts.push(`-m ${input.ipv4Mask}`);
   }
   if (input.ipv6Prefix !== undefined) {
-    assertSingleToken(input.ipv6Prefix, "ipv6Prefix");
+    assertCliValue(input.ipv6Prefix, "ipv6Prefix");
     parts.push(`-p ${input.ipv6Prefix}`);
   }
   if (input.ipv6PrefixLength !== undefined) {
@@ -217,12 +156,12 @@ function buildClientAddFrames(input: RadiusClientAddInput): readonly CommandFram
     parts.push(`-l ${String(input.ipv6PrefixLength)}`);
   }
   if (input.secret !== undefined) {
-    assertSingleToken(input.secret, "secret");
+    assertCliValue(input.secret, "secret");
     parts.push(`-s ${input.secret}`);
   }
 
   if (parts.length === 4) {
-    throw new Error("At least one radius client add option must be provided.");
+    throw new InvalidInputError("At least one radius client add option must be provided.");
   }
 
   return [frameSingleCommand(parts.join(" "))];
@@ -231,7 +170,7 @@ function buildClientAddFrames(input: RadiusClientAddInput): readonly CommandFram
 function assertPositiveClientIndex(index: number): void {
   assertInteger(index, "index");
   if (index <= 0) {
-    throw new Error(`index must be a positive integer (got ${String(index)}).`);
+    throw new InvalidInputError(`index must be a positive integer (got ${String(index)}).`);
   }
 }
 
@@ -338,7 +277,7 @@ function buildExternalViewProfileFrames(
 function assertPositiveClientIndexNamed(index: number, name: string): void {
   assertInteger(index, name);
   if (index <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(index)}).`);
+    throw new InvalidInputError(`${name} must be a positive integer (got ${String(index)}).`);
   }
 }
 

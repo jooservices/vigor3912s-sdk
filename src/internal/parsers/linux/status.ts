@@ -9,7 +9,8 @@
 
 export interface LinuxStatusResult {
   readonly raw: string;
-  readonly running: boolean;
+  /** `null` when the output says neither running nor stopped. */
+  readonly running: boolean | null;
 }
 
 const RUNNING_PATTERN = /\brunning\b/i;
@@ -22,7 +23,7 @@ const STOPPED_PATTERN = /\bstopped\b/i;
  */
 export function parseLinuxStatus(text: string): LinuxStatusResult {
   const raw = text.trim();
-  const running = RUNNING_PATTERN.test(raw) && !STOPPED_PATTERN.test(raw);
+  const running = STOPPED_PATTERN.test(raw) ? false : RUNNING_PATTERN.test(raw) ? true : null;
 
   return { raw, running };
 }

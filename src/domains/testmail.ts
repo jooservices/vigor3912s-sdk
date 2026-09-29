@@ -15,15 +15,10 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseSend } from "../internal/parsers/testmail/send.js";
 import type { RawCommandOutput } from "../internal/parsers/testmail/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
+import { firstExchangeText } from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.testmail -- `testmail` (rawLine 9000) -- write, no arguments

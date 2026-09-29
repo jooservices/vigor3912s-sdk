@@ -27,58 +27,30 @@
  * signature).
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseSet } from "../internal/parsers/tacacsplus/set.js";
 import { parseView, type TacacsplusStatusReport } from "../internal/parsers/tacacsplus/view.js";
 import type { RawCommandOutput } from "../internal/parsers/tacacsplus/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
+import { firstExchangeText, assertIntegerInRange, assertIpv4 } from "../internal/domain-support.js";
 
 /** Both TACACS+ server slots the documented `<INDEX>` argument addresses ("0 for primary server; 1 for secondary server", rawLine 4121). */
 function assertServerIndex(value: number, name: string): void {
   if (value !== 0 && value !== 1) {
-    throw new Error(
+    throw new InvalidInputError(
       `${name} must be 0 (primary server) or 1 (secondary server) (got ${String(value)}).`,
     );
   }
 }
 
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-const IPV4_PATTERN = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-
-function assertIpv4(value: string, name: string): void {
-  if (!IPV4_PATTERN.test(value)) {
-    throw new Error(`${name} must be a valid IPv4 address (got "${value}").`);
-  }
-}
-
 function assertNonEmptyNoQuotes(value: string, name: string): void {
   if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
+    throw new InvalidInputError(`${name} must not be empty.`);
   }
 
   if (value.includes('"')) {
-    throw new Error(`${name} must not contain a double-quote character.`);
+    throw new InvalidInputError(`${name} must not contain a double-quote character.`);
   }
 }
 

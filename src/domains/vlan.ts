@@ -18,8 +18,8 @@
  * signature).
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseGroup } from "../internal/parsers/vlan/group.js";
 import { parseOff } from "../internal/parsers/vlan/off.js";
@@ -35,43 +35,12 @@ import { parseSubmodeStatus } from "../internal/parsers/vlan/submode-status.js";
 import { parseSubmodeOn } from "../internal/parsers/vlan/submode-on.js";
 import { parseSubmodeOff } from "../internal/parsers/vlan/submode-off.js";
 import type { RawCommandOutput } from "../internal/parsers/vlan/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-/**
- * Generic runtime membership check for narrow string-literal-union inputs.
- * Declared generically (rather than as direct `!==` comparisons against the
- * union's own members) so `@typescript-eslint/no-unnecessary-condition`
- * doesn't flag it as statically-impossible: TypeScript's own literal types
- * only describe well-behaved callers, but this validation exists precisely
- * for callers (including plain-JS callers and tests) that don't honor them.
- */
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
-    );
-  }
-}
+import {
+  assertIntegerInRange,
+  assertOneOf,
+  defineCommandOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // LAN port numbers documented across this router's `vlan *` commands (p1..p12).
 const LAN_PORT_MIN = 1;
@@ -98,7 +67,9 @@ function buildGroupFrames(input: VlanGroupInput): readonly CommandFrame[] {
   const ports = input.ports ?? [];
 
   if (input.action !== "show" && ports.length === 0) {
-    throw new Error(`ports must include at least one LAN port for action "${input.action}".`);
+    throw new InvalidInputError(
+      `ports must include at least one LAN port for action "${input.action}".`,
+    );
   }
 
   for (const port of ports) {
@@ -348,6 +319,14 @@ export const vlanSubmodeOff: TypedOperation<void, RawCommandOutput> = {
   parse: (exchanges) => parseSubmodeOff(firstExchangeText(exchanges)),
 };
 
+// ---------------------------------------------------------------------------
+// Live-firmware-recon operations (fw 4.4.7_RC2 `?` help, owner capture in
+// `references/live-help-fw-4.4.7_RC2.txt`); absent from the Part VIII PDF.
+// ---------------------------------------------------------------------------
+
+/** LAN-to-VLAN mapping table. */
+export const vlanMap = defineCommandOperation("cli.vlan.map", "read", "vlan map");
+
 export const operations: readonly TypedOperation<never, unknown>[] = [
   vlanGroup,
   vlanOff,
@@ -362,4 +341,5 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   vlanSubmodeStatus,
   vlanSubmodeOn,
   vlanSubmodeOff,
+  vlanMap,
 ];

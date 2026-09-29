@@ -8,7 +8,7 @@ the package `exports` map.
 The package is **`"private": true`** (not on npm). Install from GitHub:
 
 ```bash
-npm install github:jooservices/vigor3912s-sdk#v1.0.0
+npm install github:jooservices/vigor3912s-sdk#v2.0.0
 ```
 
 This SDK does **not** open SSH sessions, read `.env` credentials, or connect to
@@ -21,6 +21,7 @@ adapter over `@jooservices/ssh-client`). See [`transport.md`](./transport.md).
 | ---------------------------------------- | ----------------------------------------------------------- |
 | `@jooservices/vigor3912s-sdk`            | `Vigor3912SClient`, errors, `sdkPackageName`, `sdkMetadata` |
 | `@jooservices/vigor3912s-sdk/operations` | `operations.<family>.<op>` typed descriptors                |
+| `@jooservices/vigor3912s-sdk/schemas`    | `inputSchemas`, `inputSchemaFor(manifestId)`, `JsonSchema`  |
 | `@jooservices/vigor3912s-sdk/transport`  | `Transport` and related wire types                          |
 | `@jooservices/vigor3912s-sdk/live`       | `LiveReadOnlyClient` (allowlisted reads only)               |
 
@@ -92,6 +93,30 @@ Root exports: `Vigor3912SError`, `OperationNotImplementedError`, `sdkErrorCodes`
 | `session_closed`            | Transport closed during / before send           |
 | `forged_operation_rejected` | Descriptor is not the registry canonical object |
 | `live_client_rejected`      | `LiveReadOnlyClient` guard failed               |
+
+## Input schemas
+
+`@jooservices/vigor3912s-sdk/schemas` publishes machine-readable JSON Schema
+for every implemented operation's input, generated from each operation's
+`TInput` TypeScript type (`manifest:generate`, drift-checked by
+`manifest:check`). Zero runtime dependencies — a small hand-written
+`JsonSchema` type, not a general-purpose JSON Schema library. Useful for a
+downstream consumer (e.g. an MCP server) that needs tool argument schemas
+without depending on this SDK's TypeScript types at runtime.
+
+```ts
+import { inputSchemaFor, inputSchemas } from "@jooservices/vigor3912s-sdk/schemas";
+
+inputSchemas["cli.ip.addr"];
+// { type: "object", properties: { ipv4Address: { type: "string" } },
+//   required: ["ipv4Address"], additionalProperties: false }
+
+inputSchemaFor("cli.sys.version"); // null — void input (no arguments)
+inputSchemaFor("cli.does.not.exist"); // undefined — unknown manifestId
+```
+
+`null` means the operation takes no input; `undefined` from `inputSchemaFor`
+means the `manifestId` is not a known implemented operation.
 
 ## `LiveReadOnlyClient`
 

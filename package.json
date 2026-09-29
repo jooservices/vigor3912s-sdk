@@ -1,6 +1,6 @@
 {
   "name": "@jooservices/vigor3912s-sdk",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Node 24 TypeScript SDK for typed DrayTek Vigor3912S CLI operations with public Transport injection.",
   "private": true,
   "type": "module",
@@ -22,6 +22,10 @@
       "types": "./dist/operations/index.d.ts",
       "import": "./dist/operations/index.js"
     },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.js"
+    },
     "./transport": {
       "types": "./dist/transport/index.d.ts",
       "import": "./dist/transport/index.js"
@@ -31,27 +35,29 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "clean": "node -e \"process.getBuiltinModule('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "ci": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm test && npm run manifest:check && npm run test:coverage && npm audit --audit-level=moderate",
     "fixtures:import": "npm run build && node --experimental-strip-types tools/import-redacted-fixture.ts",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "lint": "eslint .",
+    "prepare": "npm run build",
     "manifest:check": "tsc -p tsconfig.generator.json && node --experimental-strip-types tools/generate-capability-manifest.ts --check",
     "manifest:generate": "tsc -p tsconfig.generator.json && node --experimental-strip-types tools/generate-capability-manifest.ts",
-    "test": "npm run build && vitest run",
+    "test": "npm run build && vitest run && node --experimental-strip-types tools/check-operation-usage.ts",
     "test:coverage": "npm run build && vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify": "npm run ci"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@types/node": "26.5.1",
-    "@vitest/coverage-v8": "5.0.0",
-    "eslint": "10.10.0",
-    "prettier": "3.9.6",
+    "@types/node": "26.6.2",
+    "@vitest/coverage-v8": "5.0.1",
+    "eslint": "10.11.0",
+    "prettier": "3.9.8",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.0",
-    "vitest": "5.0.0"
+    "vitest": "5.0.1"
   }
 }

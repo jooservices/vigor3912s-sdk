@@ -15,9 +15,18 @@ must:
 - Never log credentials, tokens, or raw router secrets
 - Prefer management on a trusted LAN
 
+`Vigor3912SClient.execute()` is a **raw, unguarded** API: it sends any framed
+command, including write and destructive ones, with no classification or
+authorization check. Operation `classification` is metadata; it is not a safety
+boundary. Expose `execute()` only behind the consumer's own authorization.
+
 ## Operator guidance
 
 - Keep secrets in a gitignored `.env`; never commit credentials
 - Inject only trusted `Transport` implementations
 - Use `LiveReadOnlyClient` only with an explicit read-only allowlist and
-  `VIGOR_E2E_READ_ONLY=true` when live E2E is separately authorized
+  `VIGOR_E2E_READ_ONLY=true` when live E2E is separately authorized. Its
+  LAN-only policy is bound to `Transport.remoteEndpoint` (the real peer IP and
+  port), re-checked before every command; `SessionPolicy.maxSessionMs` caps the
+  client's lifetime. A transport that misreports its endpoint defeats the
+  check — inject only trusted transports.

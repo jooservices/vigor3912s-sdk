@@ -52,9 +52,9 @@ describe("cli.vlan.status -- vlan status (read, rawLine 9426)", () => {
     ]);
   });
 
-  it("returns no channels and disabled state for text that doesn't match the documented shape", () => {
+  it("returns no channels and an unknown state for text that doesn't match the documented shape", () => {
     expect(parseVlanStatus("not a status block")).toEqual({
-      vlanEnabled: false,
+      vlanEnabled: null,
       channels: [],
     });
   });

@@ -27,8 +27,8 @@
  * dropped.
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseAppeSet } from "../internal/parsers/csm/appe-set.js";
 import { parseAppeShow, type CsmAppeShowReport } from "../internal/parsers/csm/appe-show.js";
@@ -41,65 +41,19 @@ import { parseUcfObjWf } from "../internal/parsers/csm/ucf-obj-wf.js";
 import { parseWcf } from "../internal/parsers/csm/wcf.js";
 import { parseDnsf } from "../internal/parsers/csm/dnsf.js";
 import type { RawCommandOutput } from "../internal/parsers/csm/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertPositiveInteger(value: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(value)}).`);
-  }
-}
-
-function assertMaxLength(value: string, max: number, name: string): void {
-  if (value.length > max) {
-    throw new Error(
-      `${name} must be at most ${String(max)} characters (got ${String(value.length)}).`,
-    );
-  }
-}
-
-function assertNonEmpty(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
-  }
-}
-
-/**
- * Generic runtime membership check for narrow string-literal-union inputs.
- * Declared generically (rather than as direct `!==` comparisons against the
- * union's own members) so `@typescript-eslint/no-unnecessary-condition`
- * doesn't flag it as statically-impossible: TypeScript's own literal types
- * only describe well-behaved callers, but this validation exists precisely
- * for callers (including plain-JS callers and tests) that don't honor them.
- */
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
-    );
-  }
-}
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertMaxLength,
+  assertNonEmpty,
+  assertNumberOneOf,
+  assertOneOf,
+  assertPositiveInteger,
+  assertTrailingText,
+  defineCommandOperation,
+  defineRawOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 /** CSM profile index range used across this family's documented commands unless a narrower range is given ("from 1 to 32" for APPE profiles, "from 1 to 8" for UCF/WCF profiles). */
 const APPE_PROFILE_INDEX_MIN = 1;
@@ -222,14 +176,14 @@ function buildUcfFrames(input: CsmUcfInput): readonly CommandFrame[] {
       return [frameSingleCommand("csm ucf setdefault")];
     }
     case "message": {
-      assertNonEmpty(input.message, "message");
+      assertTrailingText(input.message, "message");
       assertMaxLength(input.message, 255, "message");
 
       return [frameSingleCommand(`csm ucf msg ${input.message}`)];
     }
     case "objName": {
       assertIntegerInRange(input.index, CSM_PROFILE_INDEX_MIN, CSM_PROFILE_INDEX_MAX, "index");
-      assertNonEmpty(input.name, "name");
+      assertCliValue(input.name, "name");
       assertMaxLength(input.name, 15, "name");
 
       return [frameSingleCommand(`csm ucf obj ${String(input.index)} -n ${input.name}`)];
@@ -451,7 +405,38 @@ export type CsmWcfInput =
   | { readonly action: "objView"; readonly index: number }
   | { readonly action: "objAction"; readonly index: number; readonly value: "P" | "B" }
   | { readonly action: "objName"; readonly index: number; readonly name: string }
-  | { readonly action: "objLog"; readonly index: number; readonly logType: "P" | "B" | "A" };
+  | { readonly action: "objLog"; readonly index: number; readonly logType: "P" | "B" | "A" }
+  | { readonly action: "objKeywordObject"; readonly index: number; readonly objectIndex: number }
+  | { readonly action: "objKeywordGroup"; readonly index: number; readonly groupIndex: number }
+  | {
+      readonly action: "objListAction";
+      readonly index: number;
+      /** Black/white list: E enable, D disable, P pass, B block. */
+      readonly value: "E" | "D" | "P" | "B";
+    }
+  | {
+      readonly action: "objSelect" | "objDiscard";
+      readonly index: number;
+      /** A CATEGORY (e.g. "Bot Nets") or WEB_GROUP (e.g. "Security") name. */
+      readonly item: string;
+    };
+
+/** Category / web-group names contain spaces; the manual quotes them. */
+function quoteItem(item: string): string {
+  assertNonEmpty(item, "item");
+
+  if (item.includes('"')) {
+    throw new InvalidInputError(
+      `item must not contain a double quote (got ${JSON.stringify(item)}).`,
+    );
+  }
+
+  if (item.startsWith("-")) {
+    throw new InvalidInputError('item must not start with "-".');
+  }
+
+  return /\s/.test(item) ? `"${item}"` : item;
+}
 
 function buildWcfFrames(input: CsmWcfInput): readonly CommandFrame[] {
   switch (input.action) {
@@ -465,12 +450,12 @@ function buildWcfFrames(input: CsmWcfInput): readonly CommandFrame[] {
       return [frameSingleCommand("csm wcf cache")];
     }
     case "server": {
-      assertNonEmpty(input.server, "server");
+      assertCliValue(input.server, "server");
 
       return [frameSingleCommand(`csm wcf server ${input.server}`)];
     }
     case "message": {
-      assertNonEmpty(input.message, "message");
+      assertTrailingText(input.message, "message");
       assertMaxLength(input.message, 255, "message");
 
       return [frameSingleCommand(`csm wcf msg ${input.message}`)];
@@ -491,7 +476,7 @@ function buildWcfFrames(input: CsmWcfInput): readonly CommandFrame[] {
     }
     case "objName": {
       assertIntegerInRange(input.index, CSM_PROFILE_INDEX_MIN, CSM_PROFILE_INDEX_MAX, "index");
-      assertNonEmpty(input.name, "name");
+      assertCliValue(input.name, "name");
       assertMaxLength(input.name, 15, "name");
 
       return [frameSingleCommand(`csm wcf obj ${String(input.index)} -n ${input.name}`)];
@@ -501,6 +486,37 @@ function buildWcfFrames(input: CsmWcfInput): readonly CommandFrame[] {
       assertOneOf(input.logType, ["P", "B", "A"], "logType");
 
       return [frameSingleCommand(`csm wcf obj ${String(input.index)} -l ${input.logType}`)];
+    }
+    case "objKeywordObject": {
+      assertIntegerInRange(input.index, CSM_PROFILE_INDEX_MIN, CSM_PROFILE_INDEX_MAX, "index");
+      assertPositiveInteger(input.objectIndex, "objectIndex");
+
+      return [
+        frameSingleCommand(`csm wcf obj ${String(input.index)} -o ${String(input.objectIndex)}`),
+      ];
+    }
+    case "objKeywordGroup": {
+      assertIntegerInRange(input.index, CSM_PROFILE_INDEX_MIN, CSM_PROFILE_INDEX_MAX, "index");
+      assertPositiveInteger(input.groupIndex, "groupIndex");
+
+      return [
+        frameSingleCommand(`csm wcf obj ${String(input.index)} -g ${String(input.groupIndex)}`),
+      ];
+    }
+    case "objListAction": {
+      assertIntegerInRange(input.index, CSM_PROFILE_INDEX_MIN, CSM_PROFILE_INDEX_MAX, "index");
+      assertOneOf(input.value, ["E", "D", "P", "B"], "value");
+
+      return [frameSingleCommand(`csm wcf obj ${String(input.index)} -w ${input.value}`)];
+    }
+    case "objSelect":
+    case "objDiscard": {
+      assertIntegerInRange(input.index, CSM_PROFILE_INDEX_MIN, CSM_PROFILE_INDEX_MAX, "index");
+      const flag = input.action === "objSelect" ? "-s" : "-u";
+
+      return [
+        frameSingleCommand(`csm wcf obj ${String(input.index)} ${flag} ${quoteItem(input.item)}`),
+      ];
     }
   }
 }
@@ -536,7 +552,10 @@ export type CsmDnsfInput =
       readonly index: number;
       readonly logType: "P" | "B" | "A";
     }
-  | { readonly action: "profileSetdefault" };
+  | { readonly action: "profileSetdefault" }
+  | { readonly action: "profileEditWcf"; readonly index: number; readonly wcfProfile: number }
+  | { readonly action: "profileEditUcf"; readonly index: number; readonly ucfProfile: number }
+  | { readonly action: "profileEditCache"; readonly index: number; readonly hours: number };
 
 function buildDnsfFrames(input: CsmDnsfInput): readonly CommandFrame[] {
   switch (input.action) {
@@ -575,7 +594,7 @@ function buildDnsfFrames(input: CsmDnsfInput): readonly CommandFrame[] {
     }
     case "profileEditName": {
       assertPositiveInteger(input.index, "index");
-      assertNonEmpty(input.name, "name");
+      assertCliValue(input.name, "name");
 
       return [frameSingleCommand(`csm dnsf profile_edit ${String(input.index)} -n ${input.name}`)];
     }
@@ -589,6 +608,36 @@ function buildDnsfFrames(input: CsmDnsfInput): readonly CommandFrame[] {
     }
     case "profileSetdefault": {
       return [frameSingleCommand("csm dnsf profile_setdefault")];
+    }
+    case "profileEditWcf": {
+      assertPositiveInteger(input.index, "index");
+      assertIntegerInRange(input.wcfProfile, 1, 8, "wcfProfile");
+
+      return [
+        frameSingleCommand(
+          `csm dnsf profile_edit ${String(input.index)} -w ${String(input.wcfProfile)}`,
+        ),
+      ];
+    }
+    case "profileEditUcf": {
+      assertPositiveInteger(input.index, "index");
+      assertIntegerInRange(input.ucfProfile, 1, 8, "ucfProfile");
+
+      return [
+        frameSingleCommand(
+          `csm dnsf profile_edit ${String(input.index)} -u ${String(input.ucfProfile)}`,
+        ),
+      ];
+    }
+    case "profileEditCache": {
+      assertPositiveInteger(input.index, "index");
+      assertIntegerInRange(input.hours, 1, 24, "hours");
+
+      return [
+        frameSingleCommand(
+          `csm dnsf profile_edit ${String(input.index)} -c ${String(input.hours)}`,
+        ),
+      ];
     }
   }
 }
@@ -615,10 +664,8 @@ function buildAppeProfFrames(input: CsmAppeProfInput): readonly CommandFrame[] {
 
   switch (input.action) {
     case "setName": {
+      assertCliValue(input.name, "name");
       assertMaxLength(input.name, 15, "name");
-      if (input.name.trim().length === 0 || /\s/.test(input.name)) {
-        throw new Error(`name must be a single non-empty token (got "${input.name}").`);
-      }
 
       return [frameSingleCommand(`csm appe prof -i ${String(input.index)} -n ${input.name}`)];
     }
@@ -660,7 +707,7 @@ function buildAppeConfigFrames(input: CsmAppeConfigInput): readonly CommandFrame
   assertIntegerInRange(input.index, 1, 32, "index");
 
   if (!(input.group in APPE_CONFIG_GROUP_FLAG)) {
-    throw new Error(
+    throw new InvalidInputError(
       `group must be one of im, p2p, protocol, others, route (got ${JSON.stringify(input.group)}).`,
     );
   }
@@ -679,7 +726,82 @@ export const csmAppeConfig: TypedOperation<CsmAppeConfigInput, RawCommandOutput>
   parse: (exchanges) => parseAppeConfig(firstExchangeText(exchanges)),
 };
 
+// ---------------------------------------------------------------------------
+// cli.csm.dnsf.localbw.* -- `csm dnsf local_bw e/d/p/b/a/g/o/s/c` (rawLine
+// 540/588): DNS filter local black/white list. `s` shows it, `c` clears it
+// back to factory defaults (destructive), the rest configure it.
+// ---------------------------------------------------------------------------
+
+export const csmDnsfLocalBwShow = defineCommandOperation(
+  "cli.csm.dnsf.localbw.show",
+  "read",
+  "csm dnsf local_bw s",
+);
+
+export const csmDnsfLocalBwClear = defineCommandOperation(
+  "cli.csm.dnsf.localbw.clear",
+  "destructive",
+  "csm dnsf local_bw c",
+);
+
+export type CsmDnsfLocalBwSetInput =
+  | { readonly action: "enable" | "disable" | "pass" | "block" }
+  | {
+      readonly action: "addressType";
+      /** 0 mask, 1 single, 2 any, 3 range, 4 group and objects. */
+      readonly type: number;
+      /** Address value(s) for the type, e.g. an IP for single. */
+      readonly values?: readonly string[];
+    }
+  | {
+      readonly action: "group";
+      readonly item: 1 | 2;
+      /** Group index 1..192. */
+      readonly groupIndex: number;
+    }
+  | {
+      readonly action: "object";
+      readonly item: 1 | 2;
+      /** Object index 1..32. */
+      readonly objectIndex: number;
+    };
+
+const LOCAL_BW_LETTER = { enable: "e", disable: "d", pass: "p", block: "b" } as const;
+
+export const csmDnsfLocalBwSet = defineRawOperation<CsmDnsfLocalBwSetInput>(
+  "cli.csm.dnsf.localbw.set",
+  "write",
+  (input) => {
+    switch (input.action) {
+      case "addressType": {
+        assertIntegerInRange(input.type, 0, 4, "type");
+        const values = input.values ?? [];
+
+        for (const [position, value] of values.entries()) {
+          assertCliValue(value, `values[${String(position)}]`);
+        }
+
+        return ["csm dnsf local_bw a", String(input.type), ...values].join(" ");
+      }
+      case "group":
+        assertNumberOneOf(input.item, [1, 2], "item");
+        assertIntegerInRange(input.groupIndex, 1, 192, "groupIndex");
+        return `csm dnsf local_bw g ${String(input.item)} ${String(input.groupIndex)}`;
+      case "object":
+        assertNumberOneOf(input.item, [1, 2], "item");
+        assertIntegerInRange(input.objectIndex, 1, 32, "objectIndex");
+        return `csm dnsf local_bw o ${String(input.item)} ${String(input.objectIndex)}`;
+      default:
+        assertOneOf(input.action, ["enable", "disable", "pass", "block"], "action");
+        return `csm dnsf local_bw ${LOCAL_BW_LETTER[input.action]}`;
+    }
+  },
+);
+
 export const operations: readonly TypedOperation<never, unknown>[] = [
+  csmDnsfLocalBwShow,
+  csmDnsfLocalBwClear,
+  csmDnsfLocalBwSet,
   csmAppeSet,
   csmAppeShow,
   csmAppeProf,

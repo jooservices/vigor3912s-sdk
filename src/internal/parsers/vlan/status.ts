@@ -24,7 +24,8 @@ export interface VlanChannelStatus {
 }
 
 export interface VlanStatusReport {
-  readonly vlanEnabled: boolean;
+  /** `null` when the `VLAN is Enable/Disable` header is missing. */
+  readonly vlanEnabled: boolean | null;
   readonly channels: readonly VlanChannelStatus[];
 }
 
@@ -32,7 +33,7 @@ const HEADER_LINE_PATTERN = /^VLAN\s+is\s+(Enable|Disable)\s*:/i;
 const CHANNEL_LINE_PATTERN = /^\s*(\d+)\s+(ON|OFF)\s+(\d+)\s+(\d+)\s+(.*?)\s+(\d+:\S+)\s*$/;
 
 export function parseVlanStatus(text: string): VlanStatusReport {
-  let vlanEnabled = false;
+  let vlanEnabled: boolean | null = null;
   const channels: VlanChannelStatus[] = [];
 
   for (const line of text.split(/\r?\n/)) {

@@ -17,7 +17,6 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseDevstat, type UsbDeviceStatusReport } from "../internal/parsers/usb/devstat.js";
 import { parseTemp, type UsbTempReport } from "../internal/parsers/usb/temp.js";
@@ -27,19 +26,12 @@ import { parseUserEnable } from "../internal/parsers/usb/user-enable.js";
 import { parseUserDisable } from "../internal/parsers/usb/user-disable.js";
 import { parseDisk } from "../internal/parsers/usb/disk.js";
 import type { RawCommandOutput } from "../internal/parsers/usb/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
-    );
-  }
-}
+import {
+  assertIntegerInRange,
+  assertOneOf,
+  defineCommandOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.usb.devstat -- `usb devstat` (rawLine 9154) -- no-argument read query.
@@ -80,22 +72,6 @@ export const usbTemp: TypedOperation<UsbTempInput, UsbTempReport> = {
   buildFrames: buildTempFrames,
   parse: (exchanges) => parseTemp(firstExchangeText(exchanges)),
 };
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
 
 function assertUsbUserIndex(index: number): void {
   assertIntegerInRange(index, 1, 16, "index");
@@ -186,6 +162,13 @@ export const usbDisk: TypedOperation<void, RawCommandOutput> = {
   parse: (exchanges) => parseDisk(firstExchangeText(exchanges)),
 };
 
+// ---------------------------------------------------------------------------
+// Live-firmware-recon operations (fw 4.4.7_RC2 `?` help, owner capture in
+// `references/live-help-fw-4.4.7_RC2.txt`); absent from the Part VIII PDF.
+// ---------------------------------------------------------------------------
+
+export const usbFtpUsage = defineCommandOperation("cli.usb.ftpusage", "read", "usb FTPusage");
+
 export const operations: readonly TypedOperation<never, unknown>[] = [
   usbDevstat,
   usbTemp,
@@ -194,4 +177,5 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   usbUserEnable,
   usbUserDisable,
   usbDisk,
+  usbFtpUsage,
 ];

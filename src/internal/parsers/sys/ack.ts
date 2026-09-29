@@ -11,10 +11,8 @@
  * implementation shortcut.
  */
 
-export interface SysAck {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseSysAck(text: string): SysAck {
-  return { raw: text.trim() };
-}
+export type SysAck = RawCommandOutput;
+
+export const parseSysAck: (text: string) => SysAck = parseRawText;
