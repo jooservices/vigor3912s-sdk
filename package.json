@@ -42,6 +42,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "lint": "eslint .",
+    "prepare": "npm run build",
     "manifest:check": "tsc -p tsconfig.generator.json && node --experimental-strip-types tools/generate-capability-manifest.ts --check",
     "manifest:generate": "tsc -p tsconfig.generator.json && node --experimental-strip-types tools/generate-capability-manifest.ts",
     "test": "npm run build && vitest run && node --experimental-strip-types tools/check-operation-usage.ts",
