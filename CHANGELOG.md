@@ -97,6 +97,12 @@ l2lset/l2lDrop/dinset/option/trunk/sameSubnet`, `user set/edit/account`)
   MACs and `secret`, `psk`, `pre-shared key`, `community`, `passphrase` labels.
 - `npm run build` cleans `dist/` first, so removed modules are never shipped.
 
+### Fixed
+
+- Installing from a Git tag (`npm install github:jooservices/vigor3912s-sdk#<tag>`)
+  now builds `dist/` via a `prepare` script; previously the installed package
+  had no build output and every import failed.
+
 ### Deprecated
 
 - `TransportPolicy.connectTimeoutMs` — not enforced by the SDK; the transport
