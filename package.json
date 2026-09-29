@@ -1,6 +1,6 @@
 {
   "name": "@jooservices/vigor3912s-sdk",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Node 24 TypeScript SDK for typed DrayTek Vigor3912S CLI operations with public Transport injection.",
   "private": true,
   "type": "module",

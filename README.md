@@ -13,7 +13,7 @@ injection contract. The package does **not** open SSH sessions and does
 
 ## Status
 
-**v1.0.0.** The package stays `"private": true` and is not published to npm;
+**v2.0.0.** The package stays `"private": true` and is not published to npm;
 consume it from the checkout or a Git tag. See [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Features
@@ -44,13 +44,13 @@ consume it from the checkout or a Git tag. See [`CHANGELOG.md`](./CHANGELOG.md).
 Not published to npm. Install from GitHub (pin a tag or branch):
 
 ```bash
-npm install github:jooservices/vigor3912s-sdk#v1.0.0
+npm install github:jooservices/vigor3912s-sdk#v2.0.0
 ```
 
 ```json
 {
   "dependencies": {
-    "@jooservices/vigor3912s-sdk": "github:jooservices/vigor3912s-sdk#v1.0.0"
+    "@jooservices/vigor3912s-sdk": "github:jooservices/vigor3912s-sdk#v2.0.0"
   }
 }
 ```
