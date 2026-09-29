@@ -45,19 +45,19 @@ describe("sys version", () => {
     });
   });
 
-  it("returns empty strings for text that doesn't match the documented shape", () => {
+  it("returns null fields for text that doesn't match the documented shape", () => {
     const parsed = operation.parse(exchanges("% Command Error"));
 
     expect(parsed).toEqual({
-      routerModel: "",
-      version: "",
-      profileVersion: "",
-      status: "",
-      routerIp: "",
-      netmask: "",
-      firmwareBuildDateTime: "",
-      routerName: "",
-      revision: "",
+      routerModel: null,
+      version: null,
+      profileVersion: null,
+      status: null,
+      routerIp: null,
+      netmask: null,
+      firmwareBuildDateTime: null,
+      routerName: null,
+      revision: null,
     });
   });
 

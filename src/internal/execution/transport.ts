@@ -13,10 +13,23 @@ export interface CommandExchange {
 /**
  * What a `Transport` hands back for one `send()`. Structurally identical to
  * `CommandExchange` today; kept as a distinct name per the architecture so a
- * future real transport can attach transport-only detail (e.g. raw framing
+ * transport can attach transport-only detail (e.g. raw framing
  * artifacts) without widening the parser-facing `CommandExchange` shape.
  */
 export type TransportExchange = CommandExchange;
+
+/** Network peer of a transport session. */
+export interface TransportEndpoint {
+  /** IP literal of the peer actually connected to (not a hostname). */
+  readonly address: string;
+  readonly port: number;
+}
+
+/** One piece of output streamed by `Transport.stream`, in arrival order. */
+export interface TransportChunk {
+  readonly stream: "stdout" | "stderr";
+  readonly data: string;
+}
 
 /**
  * Wire boundary consumed by the SDK runner and implemented outside this SDK.
@@ -35,6 +48,13 @@ export interface Transport {
   readonly isOpen: boolean;
 
   /**
+   * The peer this session is connected to (resolved IP, not a hostname).
+   * Optional for general use; `LiveReadOnlyClient` requires it and binds its
+   * LAN-only policy to it before every command.
+   */
+  readonly remoteEndpoint?: TransportEndpoint | undefined;
+
+  /**
    * Send one SDK-created frame and resolve with one exchange. Do not fabricate
    * exit codes; DrayOS outcome text belongs in `stdout`/`stderr`.
    */
@@ -43,6 +63,20 @@ export interface Transport {
     limits: ExecutionLimits,
     signal: AbortSignal,
   ): Promise<TransportExchange>;
+
+  /**
+   * Optional streaming form of `send()`: yield output chunks as they arrive
+   * and finish when the prompt returns. When present the runner uses it
+   * instead of `send()` and enforces `maxOutputBytes` and `idleTimeoutMs`
+   * while output is still arriving, so an oversized or stalled response is
+   * stopped before it is buffered. With `send()` alone those two limits can
+   * only be checked after the transport returns.
+   */
+  stream?(
+    frame: CommandFrame,
+    limits: ExecutionLimits,
+    signal: AbortSignal,
+  ): AsyncIterable<TransportChunk>;
 
   /** Close the session; `reason` is diagnostic text, not a router command. */
   close(reason: string): Promise<void>;

@@ -20,15 +20,15 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseStatus } from "../internal/parsers/service/status.js";
 import type { RawCommandOutput } from "../internal/parsers/service/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
+import {
+  assertCliValue,
+  defineCommandOperation,
+  defineRawOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.service -- `service -s` (rawLine 13038) -- read, no arguments
@@ -45,4 +45,68 @@ export const serviceStatus: TypedOperation<void, RawCommandOutput> = {
   parse: (exchanges) => parseStatus(firstExchangeText(exchanges)),
 };
 
-export const operations: readonly TypedOperation<never, unknown>[] = [serviceStatus];
+// ---------------------------------------------------------------------------
+// Sub-form completion (S8): `service -r|-l|-i|-t|-c` (rawLine 13038).
+// ---------------------------------------------------------------------------
+
+export const serviceRefresh = defineCommandOperation("cli.service.refresh", "read", "service -r");
+
+export interface ServiceLoginInput {
+  /** MyVigor account name. */
+  readonly account: string;
+  /** MyVigor password (secret). */
+  readonly password: string;
+}
+
+export const serviceLogin = defineRawOperation<ServiceLoginInput>(
+  "cli.service.login",
+  "write",
+  (input) => {
+    assertCliValue(input.account, "account");
+    assertCliValue(input.password, "password");
+    return `service -l ${input.account} ${input.password}`;
+  },
+);
+
+export interface ServiceTransferOwnerInput {
+  readonly newOwner: string;
+  readonly newOwnerEmail: string;
+}
+
+export const serviceTransferOwner = defineRawOperation<ServiceTransferOwnerInput>(
+  "cli.service.transferowner",
+  "write",
+  (input) => {
+    assertCliValue(input.newOwner, "newOwner");
+    assertCliValue(input.newOwnerEmail, "newOwnerEmail");
+    return `service -i ${input.newOwner} ${input.newOwnerEmail}`;
+  },
+);
+
+export interface ServiceTransferInput {
+  /** `true` transfers this device to the new owner (`yes`); `false` cancels (`no`). */
+  readonly confirm: boolean;
+}
+
+/** Transfers device ownership to the owner set by `service -i`: destructive. */
+export const serviceTransfer = defineRawOperation<ServiceTransferInput>(
+  "cli.service.transfer",
+  "destructive",
+  (input) => `service -t ${input.confirm ? "yes" : "no"}`,
+);
+
+/** Clears the current owner's MyVigor account information: destructive. */
+export const serviceClear = defineCommandOperation(
+  "cli.service.clear",
+  "destructive",
+  "service -c",
+);
+
+export const operations: readonly TypedOperation<never, unknown>[] = [
+  serviceStatus,
+  serviceRefresh,
+  serviceLogin,
+  serviceTransferOwner,
+  serviceTransfer,
+  serviceClear,
+];

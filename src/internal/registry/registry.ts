@@ -11,16 +11,9 @@
  *   2. every manifest entry with `status: "implemented"` has >=1 registry
  *      entry.
  *
- * Deliberate scope note (B1, Wave 2): this module assembles a registry from
- * a caller-supplied array of `TypedOperation` entries — it is not yet wired
- * to real domain modules (`src/domains/*.ts` does not exist) or to the real
- * generated manifest (`src/manifest/capability-manifest.generated.ts` does
- * not exist; only `src/manifest/types.ts` from Wave 1 Lane A A1 exists). The
- * self-assembling `internal/registry/registry.generated.ts` aggregator and
- * the generator-tool extension described in `BACKLOG.md`'s B1 entry are
- * intentionally deferred until Lane A's A2-A4 (the manifest generator) land;
- * building them now would collide with that future work. See `ARCHITECTURE.md` / historical planning notes
- * for the follow-up note.
+ * `registry.generated.ts` (self-assembled from `src/domains/*.ts` by
+ * `tools/generate-capability-manifest.ts`) is built with these functions and
+ * checked against the generated manifest.
  */
 
 import type { CapabilityEntry } from "../../manifest/types.js";
@@ -62,11 +55,8 @@ export interface RegistryManifestInvariantViolation {
  * Pure cross-check between an assembled registry and a manifest entry list.
  * Returns every invariant violation found (empty when both invariants hold).
  *
- * This is intentionally generic over `readonly CapabilityEntry[]` rather
- * than importing the (not-yet-existing) generated manifest, so the same
- * logic can be exercised today against a hand-built fixture array and later
- * reused unchanged against the real `capabilityManifest` once Lane A's A2-A4
- * land.
+ * Generic over `readonly CapabilityEntry[]` so tests can exercise it with a
+ * hand-built fixture array as well as the real `capabilityManifest`.
  */
 export function findRegistryManifestInvariantViolations(
   registry: OperationRegistry,

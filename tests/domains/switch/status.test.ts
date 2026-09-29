@@ -44,11 +44,11 @@ describe("cli.switch.status -- switch status (read)", () => {
     });
   });
 
-  it("returns all-false defaults for text that doesn't match the documented shape", () => {
+  it("reports unknown (null) flags for text that doesn't match the documented shape", () => {
     expect(parseSwitchStatus("not a status block")).toEqual({
-      autoDiscoveryEnabled: false,
-      noRespondToExternalDeviceEnabled: false,
-      displaySyslogEnabled: false,
+      autoDiscoveryEnabled: null,
+      noRespondToExternalDeviceEnabled: null,
+      displaySyslogEnabled: null,
     });
   });
 
@@ -58,9 +58,9 @@ describe("cli.switch.status -- switch status (read)", () => {
 
   it("falls back to empty text when no exchange is returned", () => {
     expect(switchStatus.parse([])).toEqual({
-      autoDiscoveryEnabled: false,
-      noRespondToExternalDeviceEnabled: false,
-      displaySyslogEnabled: false,
+      autoDiscoveryEnabled: null,
+      noRespondToExternalDeviceEnabled: null,
+      displaySyslogEnabled: null,
     });
   });
 

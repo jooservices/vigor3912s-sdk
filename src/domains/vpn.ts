@@ -24,8 +24,8 @@
  * every parser reduces to trimmed raw text.
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseDialOut } from "../internal/parsers/vpn/dialout.js";
 import { parseDinset } from "../internal/parsers/vpn/dinset.js";
@@ -63,68 +63,72 @@ import { parseSetup } from "../internal/parsers/vpn/setup.js";
 import { parseSubnet } from "../internal/parsers/vpn/subnet.js";
 import { parseTrunk } from "../internal/parsers/vpn/trunk.js";
 import type { RawCommandOutput } from "../internal/parsers/vpn/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertOneOf<T extends string | number>(
-  value: T,
-  allowed: readonly T[],
-  name: string,
-): void {
-  if (!allowed.includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => String(entry)).join(", ")} (got ${String(value)}).`,
-    );
-  }
-}
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertIpv4,
+  assertOneOf,
+  assertParamTail,
+  defineCommandOperation,
+  defineRawOperation,
+  firstExchangeText,
+  onOff,
+  type ParamTailGrammar,
+} from "../internal/domain-support.js";
 
 /** Documented LAN-to-LAN / remote dial-in profile index range (Part VIII). */
 const PROFILE_INDEX_MIN = 1;
 const PROFILE_INDEX_MAX = 500;
 
-const MAX_PARAM_LENGTH = 255;
-
 /**
- * Mirrors the sibling registry's own `safeText()` validator (control
- * characters and shell metacharacters rejected) -- `frameSingleCommand`
- * independently re-checks the assembled frame, so this is a fast, named
- * pre-check, not the sole safety boundary. Uses the same `\p{Cc}` Unicode
- * property escape as `internal/execution/framing.ts` (rather than a literal
- * `\x00-\x1f` class) so `no-control-regex` doesn't flag it.
+ * Documented grammars of the `<param>` tails this family passes through
+ * (Part VIII rawLines cited on each operation below).
  */
-const CONTROL_CHAR_PATTERN = /\p{Cc}/u;
-const SHELL_METACHAR_PATTERN = /[;|&`$]/;
-
-function assertSafeParam(value: string, name: string): void {
-  if (value.length === 0 || value.length > MAX_PARAM_LENGTH) {
-    throw new Error(`${name} must be 1-${String(MAX_PARAM_LENGTH)} characters (got "${value}").`);
-  }
-
-  if (CONTROL_CHAR_PATTERN.test(value) || SHELL_METACHAR_PATTERN.test(value)) {
-    throw new Error(
-      `${name} must not contain control characters or shell metacharacters (got "${value}").`,
-    );
-  }
-}
+const VPN_PARAM_GRAMMARS = {
+  setup: {},
+  ovpn: {
+    firstToken: [
+      "mode",
+      "show",
+      "udp_mode",
+      "tcp_mode",
+      "udp_port",
+      "tcp_port",
+      "cert",
+      "replay",
+      "certmode",
+      "hmacmode",
+      "ca",
+      "tlsauth_del",
+    ],
+  },
+  dialout: { firstToken: ["dial"] },
+  l2lset: {
+    firstToken: [
+      "peerid",
+      "localid",
+      "main",
+      "aggressive",
+      "pfs",
+      "phase1",
+      "phase2",
+      "x509localid",
+      "compress",
+    ],
+  },
+  l2ldrop: { firstToken: ["l2lname", "l2lidx", "h2lname", "h2lidx"], allowIntegerFirst: true },
+  // Documented `vpn dinset <index> <subcommand> ...` keywords (rawLine 9673),
+  // kept as one string: they are CLI subcommand names, not credentials.
+  dinset: {
+    firstToken:
+      "on off username password motp pin_secret timeout dintype subnet assignip srnode remoteip peer naming multicastvpn prekey assignkey digsig ipsec localid".split(
+        " ",
+      ),
+  },
+  option: { tokenPattern: /^[A-Za-z_][A-Za-z0-9_]*=\S*$/ },
+  trunk: { firstToken: ["show_usable", "backup", "lb", "bind", "SetGre"] },
+  samesubnet: { flags: ["-i", "-e", "-I", "-o", "-E", "-v", "-m"] },
+} as const satisfies Readonly<Record<string, ParamTailGrammar>>;
 
 function assertProfileIndex(value: number, name = "index"): void {
   assertIntegerInRange(value, PROFILE_INDEX_MIN, PROFILE_INDEX_MAX, name);
@@ -145,7 +149,7 @@ export interface VpnSetupInput {
 
 function buildSetupFrames(input: VpnSetupInput): readonly CommandFrame[] {
   assertIntegerInRange(input.index, 1, 128, "index");
-  assertSafeParam(input.param, "param");
+  assertParamTail(input.param, "param", VPN_PARAM_GRAMMARS.setup);
 
   return [frameSingleCommand(`vpn setup ${String(input.index)} ${input.param}`)];
 }
@@ -200,7 +204,7 @@ export interface VpnOvpnInput {
 }
 
 function buildOvpnFrames(input: VpnOvpnInput): readonly CommandFrame[] {
-  assertSafeParam(input.param, "param");
+  assertParamTail(input.param, "param", VPN_PARAM_GRAMMARS.ovpn);
 
   return [frameSingleCommand(`vpn ovpn ${input.param}`)];
 }
@@ -223,7 +227,7 @@ export interface VpnDialOutInput {
 }
 
 function buildDialOutFrames(input: VpnDialOutInput): readonly CommandFrame[] {
-  assertSafeParam(input.param, "param");
+  assertParamTail(input.param, "param", VPN_PARAM_GRAMMARS.dialout);
 
   return [frameSingleCommand(`vpn dial_out ${input.param}`)];
 }
@@ -248,7 +252,7 @@ export interface VpnL2lSetInput {
 
 function buildL2lSetFrames(input: VpnL2lSetInput): readonly CommandFrame[] {
   assertProfileIndex(input.index);
-  assertSafeParam(input.param, "param");
+  assertParamTail(input.param, "param", VPN_PARAM_GRAMMARS.l2lset);
 
   return [frameSingleCommand(`vpn l2lset ${String(input.index)} ${input.param}`)];
 }
@@ -275,7 +279,7 @@ function buildL2lDropFrames(input: VpnL2lDropInput = {}): readonly CommandFrame[
     return [frameSingleCommand("vpn l2lDrop")];
   }
 
-  assertSafeParam(input.param, "param");
+  assertParamTail(input.param, "param", VPN_PARAM_GRAMMARS.l2ldrop);
 
   return [frameSingleCommand(`vpn l2lDrop ${input.param}`)];
 }
@@ -328,7 +332,7 @@ function buildDinsetFrames(input: VpnDinsetInput): readonly CommandFrame[] {
     return [frameSingleCommand(`vpn dinset ${String(input.index)}`)];
   }
 
-  assertSafeParam(input.param, "param");
+  assertParamTail(input.param, "param", VPN_PARAM_GRAMMARS.dinset);
 
   return [frameSingleCommand(`vpn dinset ${String(input.index)} ${input.param}`)];
 }
@@ -376,7 +380,7 @@ export interface VpnOptionInput {
 
 function buildOptionFrames(input: VpnOptionInput): readonly CommandFrame[] {
   assertProfileIndex(input.index);
-  assertSafeParam(input.param, "param");
+  assertParamTail(input.param, "param", VPN_PARAM_GRAMMARS.option);
 
   return [frameSingleCommand(`vpn option ${String(input.index)} ${input.param}`)];
 }
@@ -417,7 +421,7 @@ export interface VpnMrouteAddInput {
 
 function buildMrouteAddFrames(input: VpnMrouteAddInput): readonly CommandFrame[] {
   assertProfileIndex(input.index);
-  assertSafeParam(input.network, "network");
+  assertCliValue(input.network, "network");
 
   return [frameSingleCommand(`vpn mroute ${String(input.index)} add ${input.network}`)];
 }
@@ -436,7 +440,7 @@ export interface VpnMrouteDelInput {
 
 function buildMrouteDelFrames(input: VpnMrouteDelInput): readonly CommandFrame[] {
   assertProfileIndex(input.index);
-  assertSafeParam(input.network, "network");
+  assertCliValue(input.network, "network");
 
   return [frameSingleCommand(`vpn mroute ${String(input.index)} del ${input.network}`)];
 }
@@ -456,8 +460,8 @@ export interface VpnMrouteAddmsaInput {
 
 function buildMrouteAddmsaFrames(input: VpnMrouteAddmsaInput): readonly CommandFrame[] {
   assertProfileIndex(input.index);
-  assertSafeParam(input.localNetwork, "localNetwork");
-  assertSafeParam(input.remoteNetwork, "remoteNetwork");
+  assertCliValue(input.localNetwork, "localNetwork");
+  assertCliValue(input.remoteNetwork, "remoteNetwork");
 
   return [
     frameSingleCommand(
@@ -481,8 +485,8 @@ export interface VpnMrouteDelmsaInput {
 
 function buildMrouteDelmsaFrames(input: VpnMrouteDelmsaInput): readonly CommandFrame[] {
   assertProfileIndex(input.index);
-  assertSafeParam(input.localNetwork, "localNetwork");
-  assertSafeParam(input.remoteNetwork, "remoteNetwork");
+  assertCliValue(input.localNetwork, "localNetwork");
+  assertCliValue(input.remoteNetwork, "remoteNetwork");
 
   return [
     frameSingleCommand(
@@ -508,7 +512,7 @@ export interface VpnTrunkInput {
 }
 
 function buildTrunkFrames(input: VpnTrunkInput): readonly CommandFrame[] {
-  assertSafeParam(input.param, "param");
+  assertParamTail(input.param, "param", VPN_PARAM_GRAMMARS.trunk);
 
   return [frameSingleCommand(`vpn trunk ${input.param}`)];
 }
@@ -705,7 +709,7 @@ export interface VpnSameSubnetInput {
 }
 
 function buildSameSubnetFrames(input: VpnSameSubnetInput): readonly CommandFrame[] {
-  assertSafeParam(input.param, "param");
+  assertParamTail(input.param, "param", VPN_PARAM_GRAMMARS.samesubnet);
 
   return [frameSingleCommand(`vpn sameSubnet ${input.param}`)];
 }
@@ -787,7 +791,7 @@ const FROMLAN_LAN_PATTERN = /^lan([2-9]|[1-9]\d|100)$/;
 
 function assertFromlanLan(value: string): void {
   if (!FROMLAN_LAN_PATTERN.test(value)) {
-    throw new Error(`lan must match lan2..lan100 (got "${value}").`);
+    throw new InvalidInputError(`lan must match lan2..lan100 (got "${value}").`);
   }
 }
 
@@ -857,19 +861,19 @@ function assertMfaDuration(value: string): void {
   const match = MFA_DURATION_PATTERN.exec(value);
 
   if (match === null) {
-    throw new Error(`duration must look like 10H or 2D (got "${value}").`);
+    throw new InvalidInputError(`duration must look like 10H or 2D (got "${value}").`);
   }
 
   const amount = Number(match[1]);
   const unit = match[2];
 
   if (unit === "D" && (amount < 0 || amount > 31)) {
-    throw new Error(`duration days must be between 0 and 31 (got "${value}").`);
+    throw new InvalidInputError(`duration days must be between 0 and 31 (got "${value}").`);
   }
 
   // Hours upper bound mirrors 31D (744H); 0H disables per the doc.
   if (unit === "H" && (amount < 0 || amount > 744)) {
-    throw new Error(`duration hours must be between 0 and 744 (got "${value}").`);
+    throw new InvalidInputError(`duration hours must be between 0 and 744 (got "${value}").`);
   }
 }
 
@@ -901,7 +905,258 @@ export const vpnGraph: TypedOperation<void, RawCommandOutput> = {
   parse: (exchanges) => parseGraph(firstExchangeText(exchanges)),
 };
 
+// ---------------------------------------------------------------------------
+// Sub-form completion (S8).
+// ---------------------------------------------------------------------------
+
+// `vpn list <index> <all/com/out/in/net>` (rawLine 10146): one LAN-to-LAN
+// profile's full / common / dial-out / dial-in / network settings.
+const VPN_LIST_SECTIONS = ["all", "com", "out", "in", "net"] as const;
+
+export interface VpnListProfileInput {
+  /** LAN-to-LAN profile 1..500. */
+  readonly index: number;
+  readonly section: (typeof VPN_LIST_SECTIONS)[number];
+}
+
+export const vpnListProfile = defineRawOperation<VpnListProfileInput>(
+  "cli.vpn.list.profile",
+  "read",
+  (input) => {
+    assertIntegerInRange(input.index, 1, 500, "index");
+    assertOneOf(input.section, VPN_LIST_SECTIONS, "section");
+    return `vpn list ${String(input.index)} ${input.section}`;
+  },
+);
+
+// `vpn remote <service> [<wanN>] <on/off>` (rawLine 10208): enable/disable a
+// remote-dial-in VPN service, optionally on one WAN; applied after restart.
+const VPN_REMOTE_SERVICES = ["PPTP", "IPsec", "L2TP", "SSLVPN", "OpenVPN", "WireGuard"] as const;
+
+export interface VpnRemoteSetInput {
+  readonly service: (typeof VPN_REMOTE_SERVICES)[number];
+  /** `wan1`..`wan12`; omitted applies to the service as a whole. */
+  readonly wanInterface?: string;
+  readonly enabled: boolean;
+}
+
+export const vpnRemoteSet = defineRawOperation<VpnRemoteSetInput>(
+  "cli.vpn.remote.set",
+  "write",
+  (input) => {
+    assertOneOf(input.service, VPN_REMOTE_SERVICES, "service");
+    const state = onOff(input.enabled);
+
+    if (input.wanInterface === undefined) {
+      return `vpn remote ${input.service} ${state}`;
+    }
+
+    if (!/^wan([1-9]|1[0-2])$/.test(input.wanInterface)) {
+      throw new InvalidInputError(
+        `wanInterface must match "wan1".."wan12" (got "${input.wanInterface}").`,
+      );
+    }
+
+    return `vpn remote ${input.service} ${input.wanInterface} ${state}`;
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Live-firmware-recon operations (fw 4.4.7_RC2 `?` help, owner capture in
+// `references/live-help-fw-4.4.7_RC2.txt`); absent from the Part VIII PDF.
+// ---------------------------------------------------------------------------
+
+export type VpnUdpInput =
+  | {
+      readonly action: "add" | "del";
+      readonly remoteIp: string;
+      readonly remotePort: number;
+      readonly localPort: number;
+    }
+  | {
+      readonly action: "set";
+      readonly serverIp: string;
+      readonly serverPort: number;
+      readonly enabled: boolean;
+    }
+  | {
+      /** `udp.<DeviceID>.local` host name to clear. */
+      readonly action: "clear";
+      readonly host: string;
+    };
+
+export const vpnUdp = defineRawOperation<VpnUdpInput>("cli.vpn.udp", "write", (input) => {
+  switch (input.action) {
+    case "set":
+      assertIpv4(input.serverIp, "serverIp");
+      assertIntegerInRange(input.serverPort, 1, 65535, "serverPort");
+      return `vpn udp set ${input.serverIp} ${String(input.serverPort)} ${input.enabled ? "enable" : "disable"}`;
+    case "clear":
+      if (!/^udp\.[0-9A-Za-z]+\.local$/.test(input.host)) {
+        throw new InvalidInputError(
+          `host must look like udp.<DeviceID>.local (got "${input.host}").`,
+        );
+      }
+      return `vpn udp clear ${input.host}`;
+    default:
+      assertOneOf(input.action, ["add", "del"], "action");
+      assertIpv4(input.remoteIp, "remoteIp");
+      assertIntegerInRange(input.remotePort, 1, 65535, "remotePort");
+      assertIntegerInRange(input.localPort, 1, 65535, "localPort");
+      return `vpn udp ${input.action} ${input.remoteIp} ${String(input.remotePort)} ${String(input.localPort)}`;
+  }
+});
+
+export interface VpnPassApmInput {
+  readonly enabled: boolean;
+}
+
+export const vpnPassApm = defineRawOperation<VpnPassApmInput>(
+  "cli.vpn.passapm",
+  "write",
+  (input) => `vpn passAPM ${onOff(input.enabled)}`,
+);
+
+export interface VpnDpdkctrlTableInput {
+  /** IPsec security policy (`sp`) or security association (`sa`) table. */
+  readonly table: "sp" | "sa";
+}
+
+export const vpnDpdkctrlDump = defineRawOperation<VpnDpdkctrlTableInput>(
+  "cli.vpn.dpdkctrl.dump",
+  "read",
+  (input) => {
+    assertOneOf(input.table, ["sp", "sa"], "table");
+    return `vpn dpdkctrl "${input.table} dump"`;
+  },
+);
+
+/** Flushes the DPDK IPsec SP/SA table: established tunnels drop. */
+export const vpnDpdkctrlFlush = defineRawOperation<VpnDpdkctrlTableInput>(
+  "cli.vpn.dpdkctrl.flush",
+  "destructive",
+  (input) => {
+    assertOneOf(input.table, ["sp", "sa"], "table");
+    return `vpn dpdkctrl "${input.table} flush"`;
+  },
+);
+
+export type VpnDpdkctrlSetInput =
+  | { readonly feature: "pptp" | "wireguard"; readonly enabled: boolean }
+  | {
+      /** DPDK acceleration for SYN / SYN,ACK. */
+      readonly feature: "fastroute";
+      readonly mode: "off" | "ip_all" | "subnet" | "subnet_all";
+    };
+
+export const vpnDpdkctrlSet = defineRawOperation<VpnDpdkctrlSetInput>(
+  "cli.vpn.dpdkctrl.set",
+  "write",
+  (input) => {
+    if (input.feature === "fastroute") {
+      assertOneOf(input.mode, ["off", "ip_all", "subnet", "subnet_all"], "mode");
+      return `vpn dpdkctrl fastroute ${input.mode}`;
+    }
+
+    assertOneOf(input.feature, ["pptp", "wireguard"], "feature");
+    return `vpn dpdkctrl ${input.feature} ${onOff(input.enabled)}`;
+  },
+);
+
+const BASE64_KEY = /^[A-Za-z0-9+/]{42,43}=?$/;
+
+function assertWgKey(value: string, name: string): void {
+  if (!BASE64_KEY.test(value)) {
+    throw new InvalidInputError(`${name} must be a base64 WireGuard key.`);
+  }
+}
+
+export const vpnWgShow = defineCommandOperation("cli.vpn.wg.show", "read", "vpn wg show");
+
+export interface VpnWgEnableInput {
+  readonly enabled: boolean;
+}
+
+export const vpnWgEnable = defineRawOperation<VpnWgEnableInput>(
+  "cli.vpn.wg.enable",
+  "write",
+  (input) => `vpn wg enable ${onOff(input.enabled)}`,
+);
+
+export interface VpnWgInterfaceInput {
+  readonly listenPort: number;
+  /** Tunnel address, e.g. `10.0.0.1/24`. */
+  readonly address: string;
+  readonly mtu?: number;
+}
+
+export const vpnWgInterface = defineRawOperation<VpnWgInterfaceInput>(
+  "cli.vpn.wg.interface",
+  "write",
+  (input) => {
+    assertIntegerInRange(input.listenPort, 1, 65535, "listenPort");
+    assertCliValue(input.address, "address");
+    const mtu = input.mtu === undefined ? "" : ` ${String(input.mtu)}`;
+
+    if (input.mtu !== undefined) {
+      assertIntegerInRange(input.mtu, 576, 9000, "mtu");
+    }
+
+    return `vpn wg interface ${String(input.listenPort)} ${input.address}${mtu}`;
+  },
+);
+
+/** Generates a new private key: existing peers can no longer connect. */
+export const vpnWgKeyGen = defineCommandOperation(
+  "cli.vpn.wg.keygen",
+  "destructive",
+  "vpn wg key gen",
+);
+
+export interface VpnWgKeySetInput {
+  /** Base64 private key (secret). */
+  readonly privateKey: string;
+}
+
+/** Replaces the private key: existing peers can no longer connect. */
+export const vpnWgKeySet = defineRawOperation<VpnWgKeySetInput>(
+  "cli.vpn.wg.keyset",
+  "destructive",
+  (input) => {
+    assertWgKey(input.privateKey, "privateKey");
+    return `vpn wg key set ${input.privateKey}`;
+  },
+);
+
+export type VpnWgPeerInput =
+  | { readonly index: number; readonly action: "pubkey" | "psk"; readonly key: string }
+  | { readonly index: number; readonly action: "allowedIps"; readonly allowedIps: string }
+  | { readonly index: number; readonly action: "keepalive"; readonly seconds: number }
+  | { readonly index: number; readonly action: "clear" };
+
+export const vpnWgPeer = defineRawOperation<VpnWgPeerInput>("cli.vpn.wg.peer", "write", (input) => {
+  assertIntegerInRange(input.index, 1, 1000, "index");
+  const prefix = `vpn wg peer ${String(input.index)}`;
+
+  switch (input.action) {
+    case "pubkey":
+    case "psk":
+      assertWgKey(input.key, "key");
+      return `${prefix} ${input.action} ${input.key}`;
+    case "allowedIps":
+      assertCliValue(input.allowedIps, "allowedIps");
+      return `${prefix} allowed-ips ${input.allowedIps}`;
+    case "keepalive":
+      assertIntegerInRange(input.seconds, 0, 65535, "seconds");
+      return `${prefix} keepalive ${String(input.seconds)}`;
+    case "clear":
+      return `${prefix} clear`;
+  }
+});
+
 export const operations: readonly TypedOperation<never, unknown>[] = [
+  vpnListProfile,
+  vpnRemoteSet,
   vpnSetup,
   vpnList,
   vpnRemote,
@@ -937,4 +1192,15 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   vpnIsolate,
   vpnMfa,
   vpnGraph,
+  vpnUdp,
+  vpnPassApm,
+  vpnDpdkctrlDump,
+  vpnDpdkctrlFlush,
+  vpnDpdkctrlSet,
+  vpnWgShow,
+  vpnWgEnable,
+  vpnWgInterface,
+  vpnWgKeyGen,
+  vpnWgKeySet,
+  vpnWgPeer,
 ];

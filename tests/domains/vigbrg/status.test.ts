@@ -30,7 +30,7 @@ describe("cli.vigbrg.status -- vigbrg status (read)", () => {
 
   it("returns disabled/empty defaults for text that doesn't match the documented shape", () => {
     expect(parseStatus("not a status line")).toEqual({
-      functionEnabled: false,
+      functionEnabled: null,
       wanManagement: [],
     });
   });

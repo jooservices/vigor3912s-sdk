@@ -32,8 +32,8 @@
  * frame follows the executable syntax.
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseDns1 } from "../internal/parsers/srv/dns1.js";
 import { parseDns2 } from "../internal/parsers/srv/dns2.js";
@@ -68,71 +68,17 @@ import { parseShowall } from "../internal/parsers/srv/showall.js";
 import { parsePseudoctl } from "../internal/parsers/srv/pseudoctl.js";
 import { parseRsttimeout } from "../internal/parsers/srv/rsttimeout.js";
 import type { RawCommandOutput } from "../internal/parsers/srv/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertPositiveInteger(value: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(value)}).`);
-  }
-}
-
-const IPV4_PATTERN = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-
-function assertIpv4(value: string, name: string): void {
-  if (!IPV4_PATTERN.test(value)) {
-    throw new Error(`${name} must be a valid IPv4 address (got "${value}").`);
-  }
-}
-
-/**
- * Generic runtime membership check for narrow string-literal-union inputs
- * (see `wan.ts`'s identical helper for the `no-unnecessary-condition`
- * rationale).
- */
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
-    );
-  }
-}
-
-function assertNonEmptyString(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
-  }
-}
-
-/** Numeric counterpart to `assertOneOf` for narrow numeric-literal-union inputs (e.g. `0 | 1`, `1 | 2 | 3`). */
-function assertNumberOneOf<T extends number>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly number[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => String(entry)).join(", ")} (got ${String(value)}).`,
-    );
-  }
-}
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertIpv4,
+  assertMac,
+  assertNumberOneOf,
+  assertOneOf,
+  assertPositiveInteger,
+  defineRawOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.srv.dhcp.dns1 / cli.srv.dhcp.dns2 -- `srv dhcp dns1|dns2
@@ -302,7 +248,7 @@ function buildDhcpStatusFrames(input: SrvDhcpStatusInput): readonly CommandFrame
   }
 
   if (!DHCP_STATUS_INTERFACE_PATTERN.test(input.interfaceLabel)) {
-    throw new Error(
+    throw new InvalidInputError(
       `interfaceLabel must match "lan1".."lan100" or "ip_routed_subnet" (got "${input.interfaceLabel}").`,
     );
   }
@@ -427,10 +373,10 @@ export interface SrvNatOpenportInput {
 function buildOpenportFrames(input: SrvNatOpenportInput): readonly CommandFrame[] {
   assertIntegerInRange(input.ruleIndex, 1, 260, "ruleIndex");
   assertIntegerInRange(input.subItem, 1, 10, "subItem");
-  assertNonEmptyString(input.comment, "comment");
+  assertCliValue(input.comment, "comment");
 
   if (input.comment.length >= 23) {
-    throw new Error(
+    throw new InvalidInputError(
       `comment must be less than 23 characters (got ${String(input.comment.length)}).`,
     );
   }
@@ -492,7 +438,7 @@ function buildPortmapFrames(input: SrvNatPortmapInput): readonly CommandFrame[] 
   switch (input.action) {
     case "add": {
       assertPortmapIndex(input.index);
-      assertNonEmptyString(input.serviceName, "serviceName");
+      assertCliValue(input.serviceName, "serviceName");
       assertOneOf(input.protocol, ["TCP", "UDP"], "protocol");
       assertIntegerInRange(input.publicPort, 0, 65535, "publicPort");
       assertNumberOneOf<0 | 1>(input.sourceIpType, [0, 1], "sourceIpType");
@@ -501,7 +447,9 @@ function buildPortmapFrames(input: SrvNatPortmapInput): readonly CommandFrame[] 
       assertIntegerInRange(input.privatePort, 1, 65535, "privatePort");
 
       if (!PORTMAP_WAN_INDEX_PATTERN.test(input.wanIndex)) {
-        throw new Error(`wanIndex must match "wan1".."wan12" or "all" (got "${input.wanIndex}").`);
+        throw new InvalidInputError(
+          `wanIndex must match "wan1".."wan12" or "all" (got "${input.wanIndex}").`,
+        );
       }
 
       assertIntegerInRange(input.aliasIpIndex, 1, 32, "aliasIpIndex");
@@ -592,7 +540,7 @@ function buildTriggerFrames(input: SrvNatTriggerInput): readonly CommandFrame[] 
 
   switch (input.action) {
     case "comment": {
-      assertNonEmptyString(input.comment, "comment");
+      assertCliValue(input.comment, "comment");
 
       return [frameSingleCommand(`${prefix} -c ${input.comment}`)];
     }
@@ -869,7 +817,7 @@ export interface SrvDhcpTftpInput {
 }
 
 function buildTftpFrames(input: SrvDhcpTftpInput): readonly CommandFrame[] {
-  assertNonEmptyString(input.serverName, "serverName");
+  assertCliValue(input.serverName, "serverName");
 
   return [frameSingleCommand(`srv dhcp tftp ${input.serverName}`)];
 }
@@ -932,7 +880,7 @@ const DHCP_OPTION_LAN_PATTERN = /^([1-9]\d?|100|a|r)$/i;
 
 function assertDhcpOptionLan(value: string): void {
   if (!DHCP_OPTION_LAN_PATTERN.test(value)) {
-    throw new Error(
+    throw new InvalidInputError(
       `lan must match "1".."100", "a" (all LAN), or "r" (routed subnet) (got "${value}").`,
     );
   }
@@ -951,7 +899,7 @@ function buildOptionFrames(input: SrvDhcpOptionInput): readonly CommandFrame[] {
     case "setAscii": {
       assertDhcpOptionLan(input.lan);
       assertIntegerInRange(input.optionNumber, 0, 255, "optionNumber");
-      assertNonEmptyString(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [
         frameSingleCommand(
@@ -962,7 +910,7 @@ function buildOptionFrames(input: SrvDhcpOptionInput): readonly CommandFrame[] {
     case "setHex": {
       assertDhcpOptionLan(input.lan);
       assertIntegerInRange(input.optionNumber, 0, 255, "optionNumber");
-      assertNonEmptyString(input.value, "value");
+      assertCliValue(input.value, "value");
 
       return [
         frameSingleCommand(
@@ -1127,6 +1075,43 @@ export const srvNatView: TypedOperation<void, RawCommandOutput> = {
   parse: (exchanges) => parseNatView(firstExchangeText(exchanges)),
 };
 
+// ---------------------------------------------------------------------------
+// cli.srv.dhcp.public.add / .del -- `srv dhcp public add <MAC>` / `del
+// <MAC|all>` (rawLine 7023), MAC as XX-XX-XX-XX-XX-XX.
+// ---------------------------------------------------------------------------
+
+export interface SrvDhcpPublicAddInput {
+  /** MAC address, `XX-XX-XX-XX-XX-XX`. */
+  readonly mac: string;
+}
+
+export const srvDhcpPublicAdd = defineRawOperation<SrvDhcpPublicAddInput>(
+  "cli.srv.dhcp.public.add",
+  "write",
+  (input) => {
+    assertMac(input.mac, "mac", "dash");
+
+    return `srv dhcp public add ${input.mac}`;
+  },
+);
+
+export interface SrvDhcpPublicDelInput {
+  /** MAC address `XX-XX-XX-XX-XX-XX`, or `all`. */
+  readonly mac: string;
+}
+
+export const srvDhcpPublicDel = defineRawOperation<SrvDhcpPublicDelInput>(
+  "cli.srv.dhcp.public.del",
+  "write",
+  (input) => {
+    if (input.mac !== "all") {
+      assertMac(input.mac, "mac", "dash");
+    }
+
+    return `srv dhcp public del ${input.mac}`;
+  },
+);
+
 export const operations: readonly TypedOperation<never, unknown>[] = [
   srvDhcpDns1,
   srvDhcpDns2,
@@ -1145,6 +1130,8 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   srvDhcpPublicStatus,
   srvDhcpPublicStart,
   srvDhcpPublicCnt,
+  srvDhcpPublicAdd,
+  srvDhcpPublicDel,
   srvDhcpFrcdnsmanl,
   srvDhcpIpcnt,
   srvDhcpNodetype,

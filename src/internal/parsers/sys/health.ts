@@ -7,10 +7,8 @@
  * this returns the trimmed raw text, a real (if minimal) transform.
  */
 
-export interface SysHealth {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseSysHealth(text: string): SysHealth {
-  return { raw: text.trim() };
-}
+export type SysHealth = RawCommandOutput;
+
+export const parseSysHealth: (text: string) => SysHealth = parseRawText;
