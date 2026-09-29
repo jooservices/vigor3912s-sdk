@@ -39,6 +39,34 @@ const sourceValues = [
 ] as const;
 
 describe("fixture redaction", () => {
+  it("redacts every MAC notation DrayOS prints and secret labels beyond passwords", () => {
+    const result = redactFixture(
+      [
+        "lan_mac 00-1D-AA-0C-CD-08",
+        "swm 001daa0ccd09",
+        "cisco 001d.aa0c.cd0a",
+        "snmp community=private-ro",
+        "ipsec psk=presharedvalue",
+        "radius secret: radsecret",
+      ].join("\n"),
+    );
+
+    expect(result.redactionCounts).toMatchObject({ mac: 3, labeledValue: 3 });
+    for (const value of [
+      "00-1D-AA-0C-CD-08",
+      "001daa0ccd09",
+      "001d.aa0c.cd0a",
+      "private-ro",
+      "presharedvalue",
+      "radsecret",
+    ]) {
+      expect(result.content).not.toContain(value);
+    }
+    expect(() => {
+      validateRedactedFixture(result.content);
+    }).not.toThrow();
+  });
+
   it("redacts sensitive network identifiers and labeled secret values", () => {
     const result = redactFixture(sensitiveFixture);
 
@@ -213,7 +241,7 @@ describe("redacted fixture importer", () => {
       expect(output).toContain("198.51.100.");
       expect(provenance.sourceKind).toBe("external-input");
       expect(provenance.sourceSha256).toMatch(/^[0-9a-f]{64}$/u);
-      expect(provenance.redactionRuleVersion).toBe("fixture-redaction-v1");
+      expect(provenance.redactionRuleVersion).toBe("fixture-redaction-v2");
       expect(provenanceContent).not.toContain(sourcePath);
       expect(provenanceContent).not.toContain("source.txt");
     } finally {

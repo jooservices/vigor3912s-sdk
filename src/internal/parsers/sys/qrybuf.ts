@@ -9,10 +9,8 @@
  * transport's raw stdout) even though it is not further structured.
  */
 
-export interface SysQryBuf {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseSysQryBuf(text: string): SysQryBuf {
-  return { raw: text.trim() };
-}
+export type SysQryBuf = RawCommandOutput;
+
+export const parseSysQryBuf: (text: string) => SysQryBuf = parseRawText;

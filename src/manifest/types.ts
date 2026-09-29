@@ -16,6 +16,8 @@ export type ClassificationBasis =
   | "command-map-family"
   | "operations-danger-list"
   | "sibling-live-verified"
+  /** Syntax and semantics from the firmware's own `<command> ?` help (live-firmware-recon). */
+  | "live-help-syntax"
   | "unclassified";
 
 export type CapabilityStatus = "documented" | "implemented" | "blocked-by-documentation";

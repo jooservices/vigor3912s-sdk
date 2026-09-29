@@ -10,10 +10,8 @@
  * This returns the trimmed raw text, a real (if minimal) transform.
  */
 
-export interface HaShow {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseHaShow(text: string): HaShow {
-  return { raw: text.trim() };
-}
+export type HaShow = RawCommandOutput;
+
+export const parseHaShow: (text: string) => HaShow = parseRawText;

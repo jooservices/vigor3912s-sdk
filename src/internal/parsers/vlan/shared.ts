@@ -12,10 +12,4 @@
  * `./status.ts`) has enough documented table structure to justify a real DTO.
  */
 
-export interface RawCommandOutput {
-  readonly raw: string;
-}
-
-export function parseRawText(text: string): RawCommandOutput {
-  return { raw: text.trim() };
-}
+export { parseRawText, type RawCommandOutput } from "../raw-text.js";

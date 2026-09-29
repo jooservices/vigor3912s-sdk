@@ -20,34 +20,33 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseUp } from "../internal/parsers/wol/up.js";
 import type { RawCommandOutput } from "../internal/parsers/wol/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-const MAC_ADDRESS_PATTERN = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
-
-function assertMacAddress(value: string, name: string): void {
-  if (!MAC_ADDRESS_PATTERN.test(value)) {
-    throw new Error(`${name} must be a valid colon-separated MAC address (got "${value}").`);
-  }
-}
+import {
+  assertIpv4,
+  assertMac,
+  assertOneOf,
+  assertPositiveInteger,
+  defineRawOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.wol -- `wol up <MAC Address>` (rawLine 11766) -- write
 // ---------------------------------------------------------------------------
 
-export interface WolUpInput {
-  readonly macAddress: string;
-}
+/** `wol up <MAC>`; fw 4.4.7_RC2 help also accepts `wol up <IP Address>`. */
+export type WolUpInput = { readonly macAddress: string } | { readonly ipAddress: string };
 
 function buildUpFrames(input: WolUpInput): readonly CommandFrame[] {
-  assertMacAddress(input.macAddress, "macAddress");
+  if ("ipAddress" in input) {
+    assertIpv4(input.ipAddress, "ipAddress");
+
+    return [frameSingleCommand(`wol up ${input.ipAddress}`)];
+  }
+
+  assertMac(input.macAddress, "macAddress");
 
   return [frameSingleCommand(`wol up ${input.macAddress}`)];
 }
@@ -59,4 +58,40 @@ export const wolUp: TypedOperation<WolUpInput, RawCommandOutput> = {
   parse: (exchanges) => parseUp(firstExchangeText(exchanges)),
 };
 
-export const operations: readonly TypedOperation<never, unknown>[] = [wolUp];
+// `wol fromWan <on/off/any>`, `wol fromWan_Setting <idx> <ip> <mask>`
+// (rawLine 11766): which WAN sources may send magic packets through NAT.
+export interface WolFromWanInput {
+  readonly mode: "on" | "off" | "any";
+}
+
+export const wolFromWan = defineRawOperation<WolFromWanInput>(
+  "cli.wol.fromwan",
+  "write",
+  (input) => {
+    assertOneOf(input.mode, ["on", "off", "any"], "mode");
+    return `wol fromWan ${input.mode}`;
+  },
+);
+
+export interface WolFromWanSettingInput {
+  readonly index: number;
+  readonly ipAddress: string;
+  readonly mask: string;
+}
+
+export const wolFromWanSetting = defineRawOperation<WolFromWanSettingInput>(
+  "cli.wol.fromwansetting",
+  "write",
+  (input) => {
+    assertPositiveInteger(input.index, "index");
+    assertIpv4(input.ipAddress, "ipAddress");
+    assertIpv4(input.mask, "mask");
+    return `wol fromWan_Setting ${String(input.index)} ${input.ipAddress} ${input.mask}`;
+  },
+);
+
+export const operations: readonly TypedOperation<never, unknown>[] = [
+  wolUp,
+  wolFromWan,
+  wolFromWanSetting,
+];

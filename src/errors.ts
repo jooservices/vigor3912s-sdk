@@ -6,6 +6,9 @@ export const sdkErrorCodes = {
   sessionClosed: "session_closed",
   liveClientRejected: "live_client_rejected",
   forgedOperationRejected: "forged_operation_rejected",
+  commandRejected: "command_rejected",
+  invalidInput: "invalid_input",
+  invalidOptions: "invalid_options",
 } as const;
 
 export type SdkErrorCode = (typeof sdkErrorCodes)[keyof typeof sdkErrorCodes];
@@ -28,5 +31,16 @@ export class OperationNotImplementedError extends Vigor3912SError {
   public constructor(message = "This SDK operation is not implemented yet.") {
     super(sdkErrorCodes.operationNotImplemented, message);
     this.name = "OperationNotImplementedError";
+  }
+}
+
+/**
+ * A typed operation's input failed validation before any command was framed.
+ * Messages never echo free-text or secret values.
+ */
+export class InvalidInputError extends Vigor3912SError {
+  public constructor(message: string, options: Vigor3912SErrorOptions = {}) {
+    super(sdkErrorCodes.invalidInput, message, options);
+    this.name = "InvalidInputError";
   }
 }

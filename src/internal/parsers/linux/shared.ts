@@ -13,18 +13,16 @@
  * status-style read commands reduce to a minimal enabled/disabled flag.
  */
 
-export interface LinuxAck {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-/** Trims the raw exchange text into a minimal, honest acknowledgement DTO. */
-export function parseLinuxAck(text: string): LinuxAck {
-  return { raw: text.trim() };
-}
+/** Trimmed acknowledgement text (the shared raw-text parser). */
+export type LinuxAck = RawCommandOutput;
+export const parseLinuxAck: (text: string) => LinuxAck = parseRawText;
 
 export interface LinuxToggleStatus {
   readonly raw: string;
-  readonly enabled: boolean;
+  /** `null` when the output says neither enabled nor disabled. */
+  readonly enabled: boolean | null;
 }
 
 const ENABLED_PATTERN = /\benabled\b/i;
@@ -38,7 +36,7 @@ const DISABLED_PATTERN = /\bdisabled\b/i;
  */
 export function parseLinuxToggleStatus(text: string): LinuxToggleStatus {
   const raw = text.trim();
-  const enabled = ENABLED_PATTERN.test(raw) && !DISABLED_PATTERN.test(raw);
+  const enabled = DISABLED_PATTERN.test(raw) ? false : ENABLED_PATTERN.test(raw) ? true : null;
 
   return { raw, enabled };
 }

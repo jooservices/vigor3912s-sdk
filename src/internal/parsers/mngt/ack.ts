@@ -7,10 +7,8 @@
  * these commands, not an implementation shortcut.
  */
 
-export interface MngtAck {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseMngtAck(text: string): MngtAck {
-  return { raw: text.trim() };
-}
+export type MngtAck = RawCommandOutput;
+
+export const parseMngtAck: (text: string) => MngtAck = parseRawText;

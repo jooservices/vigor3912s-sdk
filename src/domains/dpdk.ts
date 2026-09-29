@@ -6,16 +6,11 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseDpdkCmdlog } from "../internal/parsers/dpdk/cmdlog.js";
 import { parseDpdkStatistic } from "../internal/parsers/dpdk/statistic.js";
 import type { RawCommandOutput } from "../internal/parsers/dpdk/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
+import { firstExchangeText } from "../internal/domain-support.js";
 
 function buildStatisticFrames(): readonly CommandFrame[] {
   return [frameSingleCommand("dpdk statistic")];

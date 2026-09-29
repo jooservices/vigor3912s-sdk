@@ -12,7 +12,6 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseUpnpOff } from "../internal/parsers/upnp/off.js";
 import { parseUpnpOn } from "../internal/parsers/upnp/on.js";
@@ -22,11 +21,7 @@ import { parseSubscribe } from "../internal/parsers/upnp/subscribe.js";
 import { parseTmpvs } from "../internal/parsers/upnp/tmpvs.js";
 import { parseWan } from "../internal/parsers/upnp/wan.js";
 import type { RawCommandOutput } from "../internal/parsers/upnp/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
+import { firstExchangeText, assertIntegerInRange } from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.upnp.off -- `upnp off` (rawLine 9014) -- "This command can close UPnP
@@ -75,22 +70,6 @@ export const upnpNat: TypedOperation<void, UpnpNatReport> = {
   buildFrames: buildUpnpNatFrames,
   parse: (exchanges) => parseUpnpNat(firstExchangeText(exchanges)),
 };
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
 
 // ---------------------------------------------------------------------------
 // cli.upnp.service -- `upnp service` (rawLine 9054) -- read.

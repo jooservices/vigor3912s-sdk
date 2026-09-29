@@ -43,7 +43,6 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseSwitchStatus, type SwitchStatusReport } from "../internal/parsers/switch/status.js";
 import { parseSwitchList, type SwitchListReport } from "../internal/parsers/switch/list.js";
@@ -55,11 +54,11 @@ import { parseNotRespond } from "../internal/parsers/switch/notrespond.js";
 import { parseClear } from "../internal/parsers/switch/clear.js";
 import { parseSyslog } from "../internal/parsers/switch/syslog.js";
 import type { RawCommandOutput } from "../internal/parsers/switch/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
+import {
+  assertIntegerInRange,
+  assertOneOf,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.switch.status -- `switch status` (rawLine 7709) -- read
@@ -140,33 +139,10 @@ export const switchQuery: TypedOperation<void, RawCommandOutput> = {
   parse: (exchanges) => parseQuery(firstExchangeText(exchanges)),
 };
 
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => JSON.stringify(entry)).join(", ")} (got ${JSON.stringify(value)}).`,
-    );
-  }
-}
-
 // ---------------------------------------------------------------------------
 // cli.switch.i -- `switch -i <idx> traffic <on/off/status/tx/rx>` (rawLine
-// 7687) -- read. YAGNI: traffic sub-command only; cmd/acc deferred.
+// 7687) -- write: `traffic on/off` toggles the statistic function. YAGNI:
+// traffic sub-command only; cmd/acc deferred.
 // ---------------------------------------------------------------------------
 
 export interface SwitchIInput {
@@ -183,7 +159,7 @@ function buildSwitchIFrames(input: SwitchIInput): readonly CommandFrame[] {
 
 export const switchI: TypedOperation<SwitchIInput, RawCommandOutput> = {
   manifestId: "cli.switch.i",
-  classification: "read",
+  classification: "write",
   buildFrames: buildSwitchIFrames,
   parse: (exchanges) => parseSwitchI(firstExchangeText(exchanges)),
 };

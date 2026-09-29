@@ -8,10 +8,8 @@
  * return the trimmed raw text (YAGNI).
  */
 
-export interface SysDnsCacheTbl {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseSysDnsCacheTbl(text: string): SysDnsCacheTbl {
-  return { raw: text.trim() };
-}
+export type SysDnsCacheTbl = RawCommandOutput;
+
+export const parseSysDnsCacheTbl: (text: string) => SysDnsCacheTbl = parseRawText;

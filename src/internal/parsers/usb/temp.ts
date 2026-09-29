@@ -11,10 +11,8 @@
  * trimming the raw exchange text rather than inventing an undocumented DTO.
  */
 
-export interface UsbTempReport {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseTemp(text: string): UsbTempReport {
-  return { raw: text.trim() };
-}
+export type UsbTempReport = RawCommandOutput;
+
+export const parseTemp: (text: string) => UsbTempReport = parseRawText;

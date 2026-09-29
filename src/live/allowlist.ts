@@ -29,19 +29,14 @@
  * | show traffic           | cli.show.traffic         | read            |
  * | show clienttraffic     | cli.show.clienttraffic   | read            |
  * | show statistic         | cli.show.statistic       | read            |
- * | sys health             | cli.sys.health           | read            |
  * | linux status           | cli.linux.status         | read            |
  *
- * All 14 candidates were found in the generated manifest under an exact
- * `command` match, and all are `classification: "read"` — no discrepancy to
- * report for this seed set. (`wan status` was in ARCHITECTURE.md's candidate
- * list but initially dropped from BACKLOG.md's E2 transcription; added back
- * here after the E2 developer flagged the mismatch.)
+ * All 13 are `classification: "read"` under an exact `command` match. The
+ * client's `invoke(id)` takes no input, so every id here must be input-less:
+ * `sys health` was dropped because it requires a metric argument.
  *
- * This constant is unused until Item 4's guard chain (`LiveReadOnlyClient`,
- * Wave 3 E3) has tests **and** the user gives separate, explicit
- * authorization for any live connection. Listing an id here is not a green
- * light to connect.
+ * Listing an id here is not authorization to connect to a live router;
+ * that still needs separate, explicit owner approval.
  */
 
 export const liveReadOnlyAllowlist: readonly string[] = [
@@ -57,6 +52,5 @@ export const liveReadOnlyAllowlist: readonly string[] = [
   "cli.show.traffic",
   "cli.show.clienttraffic",
   "cli.show.statistic",
-  "cli.sys.health",
   "cli.linux.status",
 ];
