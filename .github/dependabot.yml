@@ -16,6 +16,11 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
+    ignore:
+      # typescript-eslint supports typescript <6.1 only, and the schema
+      # generator uses the TypeScript compiler API; revisit TS 7 when both allow it.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: "development"
