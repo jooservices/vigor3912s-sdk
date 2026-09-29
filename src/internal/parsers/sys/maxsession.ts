@@ -8,10 +8,8 @@
  * current-value text -- return the trimmed raw text (YAGNI).
  */
 
-export interface SysMaxSession {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseSysMaxSession(text: string): SysMaxSession {
-  return { raw: text.trim() };
-}
+export type SysMaxSession = RawCommandOutput;
+
+export const parseSysMaxSession: (text: string) => SysMaxSession = parseRawText;

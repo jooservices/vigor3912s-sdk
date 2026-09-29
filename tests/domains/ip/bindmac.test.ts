@@ -63,7 +63,7 @@ describe("cli.ip.bindmac -- ip bindmac", () => {
         mac: "not-a-mac",
         comment: "x",
       }),
-    ).toThrow(/mac must be a colon-separated MAC address/);
+    ).toThrow(/mac must be a MAC address XX:XX:XX:XX:XX:XX/);
     expect(() => ipBindmac.buildFrames({ action: "del", target: "not-an-ip" })).toThrow(/target/);
   });
 

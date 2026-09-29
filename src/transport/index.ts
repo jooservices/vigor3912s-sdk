@@ -18,7 +18,10 @@
 export type {
   CommandExchange,
   Transport,
+  TransportChunk,
+  TransportEndpoint,
   TransportExchange,
 } from "../internal/execution/transport.js";
+
 export type { CommandFrame } from "../internal/execution/framing.js";
 export type { ExecutionLimits } from "../internal/execution/limits.js";

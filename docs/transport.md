@@ -43,8 +43,67 @@ Implementors must honor `AbortSignal` and `ExecutionLimits`:
   underlying wire allows.
 - `commandTimeoutMs`, `idleTimeoutMs`, `maxCommandBytes`, and `maxOutputBytes`
   are effective limits selected by the SDK runner for this exchange.
-- `maxOutputBytes` overflow is owned by the SDK runner after the exchange is
-  returned; transports should still avoid unbounded buffering while reading.
+
+### Timeouts are hard
+
+`commandTimeoutMs` does not depend on transport cooperation. When it elapses
+the runner aborts `signal`, rejects the command with `execution_timeout`
+immediately (even if `send()` never settles), and calls `close("execution_timeout")`
+without awaiting it. The abandoned command may still produce output, so the
+session must not be reused as-is: after that `close`, report `isOpen === false`
+or reconnect before the next `send()`. Queued commands never wait on a hung
+exchange.
+
+A caller abort (`ExecuteOptions.signal`) of a command already on the wire is
+handled the same way: the command rejects with the abort reason at once and
+the session is closed with `close("aborted")`. A command aborted while still
+queued is simply skipped.
+
+### Output limit
+
+A response over `maxOutputBytes` rejects with `output_limit_exceeded`, closes
+the runner for good (no truncation) and calls `close("output_limit_exceeded")`
+without awaiting it, so a transport that also hangs on close cannot delay the
+error. Create a new client to continue.
+
+### Limit values
+
+Limits and `ExecuteOptions.timeoutMs` must be positive integers (timers at
+most 2³¹−1 ms); anything else rejects with `invalid_options` rather than
+silently disabling a guard.
+
+### Streaming (`stream`) — optional, recommended
+
+`Transport.stream(frame, limits, signal)` yields `{ stream: "stdout" | "stderr",
+data }` chunks as they arrive and finishes when the prompt returns. When it is
+implemented the runner uses it instead of `send()` and enforces, while output is
+still arriving:
+
+- `maxOutputBytes` — the response is stopped at the first chunk that crosses the
+  limit (see "Output limit"); nothing beyond the limit is buffered;
+- `idleTimeoutMs` — no chunk for that long rejects with `execution_timeout`;
+- `commandTimeoutMs` — as above.
+
+With `send()` alone the SDK can only check `maxOutputBytes` after the transport
+has buffered the whole response, and cannot enforce `idleTimeoutMs`.
+
+### Endpoint (`remoteEndpoint`)
+
+`Transport.remoteEndpoint` reports the peer the session is actually connected
+to: the resolved IP literal and port. It is optional for general use and
+required by `LiveReadOnlyClient`, which verifies it is a private-LAN address on
+the policy port at `create()` and again before every command.
+
+### Router-reported failures
+
+DrayOS reports most failures as a `%`-prefixed stdout line and still returns the
+prompt. `Vigor3912SClient.invoke` and `LiveReadOnlyClient.invoke` treat non-empty `stderr` or an explicit
+failure line (`% Invalid`, `% Unknown`, `% Incomplete`, `% Error`, `% Command
+not found`, `% Insufficient arguments`, `% input …`, `% Valid (sub)commands
+are`) as `command_rejected` and never parses it as a result. The error message
+names the rejection kind only, never router output. `detectCliRejection` is
+exported for consumers of the raw `execute()` API, which returns output
+unjudged.
 
 `Transport.isOpen` must reflect whether the session can accept another
 exchange. If `isOpen` is `false`, the SDK runner reports `session_closed` before

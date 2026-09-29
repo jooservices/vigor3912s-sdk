@@ -30,8 +30,8 @@
  * signature).
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseEnable } from "../internal/parsers/ddns/enable.js";
 import { parseForceUpdate } from "../internal/parsers/ddns/forceupdate.js";
@@ -40,28 +40,14 @@ import { parseShow, type DdnsShowAccount } from "../internal/parsers/ddns/show.j
 import { parseSet } from "../internal/parsers/ddns/set.js";
 import { parseTime } from "../internal/parsers/ddns/time.js";
 import { parseSetdefault } from "../internal/parsers/ddns/setdefault.js";
-import type { RawCommandOutput } from "../internal/parsers/ddns/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
+import { parseRawText, type RawCommandOutput } from "../internal/parsers/ddns/shared.js";
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertMaxLength,
+  defineRawOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.ddns.enable -- `ddns enable [0/1]` (rawLine 627) -- write
@@ -133,23 +119,24 @@ export const ddnsShow: TypedOperation<DdnsShowInput, DdnsShowAccount> = {
   parse: (exchanges) => parseShow(firstExchangeText(exchanges)),
 };
 
-const SINGLE_CLI_TOKEN_PATTERN = /^\S+$/;
+// ---------------------------------------------------------------------------
+// cli.ddns.show.all -- bare `ddns show` (live-firmware-recon, not in the
+// Part VIII PDF). A separate operation rather than an optional `-i` on
+// `cli.ddns.show`: the bare form lists every account in an undocumented
+// shape, so it returns raw text and never goes through the single-account
+// `parseShow` (whose first-match regexes would silently drop accounts).
+// ---------------------------------------------------------------------------
 
-function assertSingleToken(value: string, name: string): void {
-  if (!SINGLE_CLI_TOKEN_PATTERN.test(value)) {
-    throw new Error(
-      `${name} must be a single non-empty token with no whitespace (got "${value}").`,
-    );
-  }
+function buildShowAllFrames(): readonly CommandFrame[] {
+  return [frameSingleCommand("ddns show")];
 }
 
-function assertMaxLength(value: string, max: number, name: string): void {
-  if (value.length > max) {
-    throw new Error(
-      `${name} must be at most ${String(max)} characters (got ${String(value.length)}).`,
-    );
-  }
-}
+export const ddnsShowAll: TypedOperation<void, RawCommandOutput> = {
+  manifestId: "cli.ddns.show.all",
+  classification: "read",
+  buildFrames: buildShowAllFrames,
+  parse: (exchanges) => parseRawText(firstExchangeText(exchanges)),
+};
 
 // ---------------------------------------------------------------------------
 // cli.ddns.set -- `ddns set option <value>` (rawLine 643) -- YAGNI: model the
@@ -170,11 +157,11 @@ function buildSetFrames(input: DdnsSetInput): readonly CommandFrame[] {
   assertIntegerInRange(input.accountIndex, 1, 6, "accountIndex");
   assertIntegerInRange(input.serviceProvider, 1, 19, "serviceProvider");
   assertIntegerInRange(input.serviceType, 1, 3, "serviceType");
-  assertSingleToken(input.domainName, "domainName");
+  assertCliValue(input.domainName, "domainName");
   assertMaxLength(input.domainName, 64, "domainName");
-  assertSingleToken(input.loginName, "loginName");
+  assertCliValue(input.loginName, "loginName");
   assertMaxLength(input.loginName, 64, "loginName");
-  assertSingleToken(input.password, "password");
+  assertCliValue(input.password, "password");
   assertMaxLength(input.password, 24, "password");
 
   return [
@@ -228,12 +215,126 @@ export const ddnsSetdefault: TypedOperation<void, RawCommandOutput> = {
   parse: (exchanges) => parseSetdefault(firstExchangeText(exchanges)),
 };
 
+// ---------------------------------------------------------------------------
+// cli.ddns.set.update -- `ddns set -i <index> [-<flag> <value> ...]`
+// (rawLine 643): change any subset of one account's settings. `cli.ddns.set`
+// keeps its 1.0.0 contract (the full core field set in one call).
+// ---------------------------------------------------------------------------
+
+export interface DdnsSetUpdateInput {
+  /** Account 1..6. */
+  readonly accountIndex: number;
+  /** `-S` provider 1..19 (1 = User-Defined). */
+  readonly serviceProvider?: number;
+  /** `-T` 1 Dynamic, 2 Custom, 3 Static. */
+  readonly serviceType?: number;
+  /** `-D "<host> <sub domain>"`. */
+  readonly domain?: { readonly hostName: string; readonly subDomain: string };
+  /** `-L` login name (max 64). */
+  readonly loginName?: string;
+  /** `-P` password (max 24). */
+  readonly password?: string;
+  /** `-E` enable/disable the account. */
+  readonly enabled?: boolean;
+  /** `-W` 1..14: WAN1 First, WAN1 Only, WAN2 First, ... (odd First, even Only). */
+  readonly wanInterface?: number;
+  /** `-C` wildcards. */
+  readonly wildcards?: boolean;
+  /** `-B` backup MX. */
+  readonly backupMx?: boolean;
+  /** `-M` mail extender (max 60). */
+  readonly mailExtender?: string;
+  /** `-R` 0 WAN IP, 1 Internet IP. */
+  readonly realWanIp?: number;
+  /** `-H` user-defined provider host (max 64). */
+  readonly providerHost?: string;
+  /** `-A` user-defined service API (max 256). */
+  readonly serviceApi?: string;
+  /** `-a` user-defined auth type: 0 basic, 1 URL. */
+  readonly authType?: number;
+  /** `-N` user-defined connection type: 0 HTTP, 1 HTTPS. */
+  readonly connectionType?: number;
+  /** `-O` user-defined server response (max 32). */
+  readonly serverResponse?: string;
+}
+
+function textFlag(flag: string, value: string | undefined, max: number, name: string): string[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  assertCliValue(value, name);
+  assertMaxLength(value, max, name);
+  return [`-${flag} ${value}`];
+}
+
+function numberFlag(
+  flag: string,
+  value: number | undefined,
+  min: number,
+  max: number,
+  name: string,
+): string[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  assertIntegerInRange(value, min, max, name);
+  return [`-${flag} ${String(value)}`];
+}
+
+function bitFlag(flag: string, value: boolean | undefined): string[] {
+  return value === undefined ? [] : [`-${flag} ${value ? "1" : "0"}`];
+}
+
+export const ddnsSetUpdate = defineRawOperation<DdnsSetUpdateInput>(
+  "cli.ddns.set.update",
+  "write",
+  (input) => {
+    assertIntegerInRange(input.accountIndex, 1, 6, "accountIndex");
+    const domain: string[] = [];
+
+    if (input.domain !== undefined) {
+      assertCliValue(input.domain.hostName, "domain.hostName");
+      assertCliValue(input.domain.subDomain, "domain.subDomain");
+      domain.push(`-D "${input.domain.hostName} ${input.domain.subDomain}"`);
+    }
+
+    const parts = [
+      ...numberFlag("S", input.serviceProvider, 1, 19, "serviceProvider"),
+      ...numberFlag("T", input.serviceType, 1, 3, "serviceType"),
+      ...domain,
+      ...textFlag("L", input.loginName, 64, "loginName"),
+      ...textFlag("P", input.password, 24, "password"),
+      ...bitFlag("E", input.enabled),
+      ...numberFlag("W", input.wanInterface, 1, 14, "wanInterface"),
+      ...bitFlag("C", input.wildcards),
+      ...bitFlag("B", input.backupMx),
+      ...textFlag("M", input.mailExtender, 60, "mailExtender"),
+      ...numberFlag("R", input.realWanIp, 0, 1, "realWanIp"),
+      ...textFlag("H", input.providerHost, 64, "providerHost"),
+      ...textFlag("A", input.serviceApi, 256, "serviceApi"),
+      ...numberFlag("a", input.authType, 0, 1, "authType"),
+      ...numberFlag("N", input.connectionType, 0, 1, "connectionType"),
+      ...textFlag("O", input.serverResponse, 32, "serverResponse"),
+    ];
+
+    if (parts.length === 0) {
+      throw new InvalidInputError("at least one setting besides accountIndex is required.");
+    }
+
+    return `ddns set -i ${String(input.accountIndex)} ${parts.join(" ")}`;
+  },
+);
+
 export const operations: readonly TypedOperation<never, unknown>[] = [
   ddnsEnable,
   ddnsLog,
   ddnsForceUpdate,
   ddnsShow,
+  ddnsShowAll,
   ddnsSet,
+  ddnsSetUpdate,
   ddnsTime,
   ddnsSetdefault,
 ];

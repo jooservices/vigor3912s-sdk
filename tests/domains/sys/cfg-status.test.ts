@@ -29,10 +29,10 @@ describe("sys cfg status", () => {
     expect(parsed).toEqual({ profileVersion: "4.0.7", status: "1 (0x491e5e6c)" });
   });
 
-  it("returns empty strings for text that doesn't match the documented shape", () => {
+  it("returns null fields for text that doesn't match the documented shape", () => {
     const parsed = operation.parse(exchanges("% Command Error"));
 
-    expect(parsed).toEqual({ profileVersion: "", status: "" });
+    expect(parsed).toEqual({ profileVersion: null, status: null });
   });
 
   it("is linked in the manifest as implemented, classification read", () => {

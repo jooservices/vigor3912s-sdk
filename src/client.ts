@@ -1,7 +1,8 @@
 import type { CommandRunner } from "./internal/command-runner.js";
 import { DefaultCommandRunner } from "./internal/execution/default-runner.js";
 import { defaultExecutionLimits, type ExecutionLimits } from "./internal/execution/limits.js";
-import type { CommandExchange, Transport } from "./internal/execution/transport.js";
+import { runOperation } from "./internal/execution/run-operation.js";
+import type { Transport } from "./internal/execution/transport.js";
 import type { TypedOperation } from "./internal/registry/operation.js";
 import { operationRegistry } from "./internal/registry/registry.generated.js";
 import { OperationNotImplementedError, Vigor3912SError, sdkErrorCodes } from "./errors.js";
@@ -20,20 +21,6 @@ export interface CommandResult {
 export interface FromTransportOptions {
   /** Partial override of default execution limits for the composed runner. */
   readonly limits?: Partial<ExecutionLimits>;
-}
-
-interface OverrideRunner extends CommandRunner {
-  runWithOverride(
-    command: string,
-    override: Partial<ExecutionLimits>,
-    options?: ExecuteOptions,
-  ): Promise<CommandResult>;
-}
-
-function hasRunWithOverride(runner: CommandRunner): runner is OverrideRunner {
-  return (
-    "runWithOverride" in runner && typeof (runner as OverrideRunner).runWithOverride === "function"
-  );
 }
 
 /**
@@ -59,6 +46,12 @@ export class Vigor3912SClient {
     return new Vigor3912SClient(new DefaultCommandRunner(transport, limits));
   }
 
+  /**
+   * Raw, unguarded dispatch: sends any framed command — including write and
+   * destructive ones — with no classification or authorization check, and
+   * returns router output unjudged (see `detectCliRejection`). Not a safety
+   * boundary; expose only behind the consumer's own authorization.
+   */
   public execute(command: string, options?: ExecuteOptions): Promise<CommandResult> {
     if (this.#runner !== undefined) {
       return this.#runner.run(command, options);
@@ -93,17 +86,6 @@ export class Vigor3912SClient {
       );
     }
 
-    const frames = operation.buildFrames(input);
-    const exchanges: CommandExchange[] = [];
-    const runner = this.#runner;
-
-    for (const frame of frames) {
-      const result = hasRunWithOverride(runner)
-        ? await runner.runWithOverride(frame.command, operation.executionOverride ?? {}, options)
-        : await runner.run(frame.command, options);
-      exchanges.push({ stdout: result.stdout, stderr: result.stderr });
-    }
-
-    return operation.parse(exchanges);
+    return runOperation(this.#runner, operation, input, options);
   }
 }

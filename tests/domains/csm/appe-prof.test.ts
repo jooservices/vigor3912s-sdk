@@ -29,11 +29,14 @@ describe("cli.csm.appe.prof", () => {
       csmAppeProf.buildFrames({ index: 1, action: "setName", name: "thisnameistoolong" }),
     ).toThrow(/name/);
     expect(() => csmAppeProf.buildFrames({ index: 1, action: "setName", name: "  " })).toThrow(
-      /single non-empty token/,
+      /must not be empty/,
     );
     expect(() =>
       csmAppeProf.buildFrames({ index: 1, action: "setName", name: "has space" }),
     ).toThrow(/single non-empty token/);
+    expect(() => csmAppeProf.buildFrames({ index: 1, action: "setName", name: "-v" })).toThrow(
+      /must not start with "-"/,
+    );
   });
 
   it("parses acknowledgement text as raw output (synthetic sample)", () => {

@@ -37,70 +37,17 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseHaSet, type HaSetAck } from "../internal/parsers/ha/set.js";
 import { parseHaShow, type HaShow } from "../internal/parsers/ha/show.js";
 import { parseHaStatus, type HaStatus } from "../internal/parsers/ha/status.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertNonEmptyToken(value: string, label: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${label} must not be empty or whitespace-only.`);
-  }
-  if (/\s/.test(value)) {
-    throw new Error(`${label} must not contain whitespace.`);
-  }
-}
-
-function assertArgsShape(args: readonly string[], label: string): void {
-  if (args.length === 0) {
-    throw new Error(`${label} requires at least one argument token.`);
-  }
-  for (const [index, token] of args.entries()) {
-    assertNonEmptyToken(token, `${label} argument #${String(index + 1)}`);
-  }
-}
-
-/**
- * Validates that every flag-shaped token (`-x`) in `args` belongs to
- * `allowedFlags`; non-flag tokens (values following a flag, e.g. a key or
- * IP address) are left to `frameSingleCommand`'s injection checks rather
- * than re-validated here -- same YAGNI note as `mngt.ts`'s identical helper.
- */
-function assertKnownFlags(
-  args: readonly string[],
-  allowedFlags: readonly string[],
-  label: string,
-): void {
-  for (const token of args) {
-    if (token.startsWith("-") && !allowedFlags.includes(token)) {
-      throw new Error(
-        `${label} flag "${token}" is not one of the documented flags: ${allowedFlags.join(", ")}.`,
-      );
-    }
-  }
-}
-
-function assertOneOf<T extends string>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly string[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => `"${entry}"`).join(", ")} (got "${value}").`,
-    );
-  }
-}
-
-function assertOneOfNumbers(value: number, allowed: readonly number[], name: string): void {
-  if (!allowed.includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => String(entry)).join(", ")} (got ${String(value)}).`,
-    );
-  }
-}
+import {
+  assertArgsShape,
+  assertKnownFlags,
+  assertNumberOneOf,
+  assertOneOf,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.ha.set -- `ha set [-<command> <parameter>|...]` (rawLine 12262) --
@@ -188,7 +135,7 @@ const HA_STATUS_FLAG_BY_SCOPE: Record<HaStatusInput["scope"], string> = {
 
 function buildHaStatusFrames(input: HaStatusInput): readonly CommandFrame[] {
   assertOneOf(input.scope, ["allRouters", "localRouter"], "scope");
-  assertOneOfNumbers(input.detailLevel, [0, 1, 2], "detailLevel");
+  assertNumberOneOf(input.detailLevel, [0, 1, 2], "detailLevel");
 
   return [
     frameSingleCommand(

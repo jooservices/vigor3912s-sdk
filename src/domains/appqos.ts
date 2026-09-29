@@ -21,7 +21,6 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseView } from "../internal/parsers/appqos/view.js";
 import { parseEnable } from "../internal/parsers/appqos/enable.js";
@@ -32,34 +31,11 @@ import { parseUntraceableView } from "../internal/parsers/appqos/untraceable-vie
 import { parseUntraceableEnable } from "../internal/parsers/appqos/untraceable-enable.js";
 import { parseUntraceableDisable } from "../internal/parsers/appqos/untraceable-disable.js";
 import type { RawCommandOutput } from "../internal/parsers/appqos/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertNumberOneOf<T extends number>(value: T, allowed: readonly T[], name: string): void {
-  if (!(allowed as readonly number[]).includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => String(entry)).join(", ")} (got ${String(value)}).`,
-    );
-  }
-}
+import {
+  assertIntegerInRange,
+  assertNumberOneOf,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 const TRACEABLE_APP_INDEXES = [50, 51, 52, 53, 54, 58, 60, 62, 63, 64, 65, 66, 68] as const;
 const QOS_CLASSES = [1, 2, 3, 4] as const;

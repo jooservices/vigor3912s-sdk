@@ -52,40 +52,21 @@
  * signature).
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseSetup } from "../internal/parsers/hsportal/setup.js";
 import { parseInfo } from "../internal/parsers/hsportal/info.js";
 import { parseLevel } from "../internal/parsers/hsportal/level.js";
 import type { RawCommandOutput } from "../internal/parsers/hsportal/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-function assertNonEmptyString(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
-  }
-}
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertOneOf,
+  defineCommandOperation,
+  defineRawOperation,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 const HSPORTAL_PROFILE_MIN = 1;
 const HSPORTAL_PROFILE_MAX = 4;
@@ -136,12 +117,12 @@ function buildSetupFrames(input: HsportalSetupInput): readonly CommandFrame[] {
       return [frameSingleCommand(`${prefix} -r ${String(input.mode)}`)];
     }
     case "google": {
-      assertNonEmptyString(input.appKey, "appKey");
+      assertCliValue(input.appKey, "appKey");
 
       return [frameSingleCommand(`${prefix} -g ${input.enabled ? "1" : "0"} -k ${input.appKey}`)];
     }
     case "facebook": {
-      assertNonEmptyString(input.appId, "appId");
+      assertCliValue(input.appId, "appId");
 
       return [frameSingleCommand(`${prefix} -f ${input.enabled ? "1" : "0"} -i ${input.appId}`)];
     }
@@ -187,8 +168,139 @@ export const hsportalLevel: TypedOperation<void, RawCommandOutput> = {
   parse: (exchanges) => parseLevel(firstExchangeText(exchanges)),
 };
 
+// ---------------------------------------------------------------------------
+// Sub-form completion (S8).
+// ---------------------------------------------------------------------------
+
+// `hsportal info -e|-n|-a <0/1>`, `-m|-s <1~10>` (rawLine 11458): user-info
+// database, notification, auto backup, mail / SMS notification object.
+export type HsportalInfoSetInput =
+  | { readonly option: "database" | "notification" | "autoBackup"; readonly enabled: boolean }
+  | { readonly option: "mailObject" | "smsObject"; readonly objectIndex: number };
+
+const HSPORTAL_INFO_FLAG = {
+  database: "-e",
+  notification: "-n",
+  autoBackup: "-a",
+  mailObject: "-m",
+  smsObject: "-s",
+} as const;
+
+export const hsportalInfoSet = defineRawOperation<HsportalInfoSetInput>(
+  "cli.hsportal.info.set",
+  "write",
+  (input) => {
+    switch (input.option) {
+      case "mailObject":
+      case "smsObject":
+        assertIntegerInRange(input.objectIndex, 1, 10, "objectIndex");
+        return `hsportal info ${HSPORTAL_INFO_FLAG[input.option]} ${String(input.objectIndex)}`;
+      default:
+        assertOneOf(input.option, ["database", "notification", "autoBackup"], "option");
+        return `hsportal info ${HSPORTAL_INFO_FLAG[input.option]} ${input.enabled ? "1" : "0"}`;
+    }
+  },
+);
+
+/** `hsportal info -c`: clears the user information database (destructive). */
+export const hsportalInfoClear = defineCommandOperation(
+  "cli.hsportal.info.clear",
+  "destructive",
+  "hsportal info -c",
+);
+
+// `hsportal level -p <index> [-e ..] [-t ..] ...` (rawLine 11494): quota
+// policy profile 1..20 settings; `-c <index>` deletes a profile.
+const LEVEL_FLAGS = {
+  e: { min: 0, max: 1 },
+  t: { min: 0, max: 1_000_000 },
+  i: { min: 0, max: 1 },
+  o: { min: 0, max: 1_000_000 },
+  d: { min: 0, max: 100 },
+  b: { min: 0, max: 1 },
+  ru: { min: 0, max: 1 },
+  tu: { min: 0, max: 1 },
+  s: { min: 0, max: 1 },
+  n: { min: 0, max: 6000 },
+  U: { min: 0, max: 1_000_000 },
+  D: { min: 0, max: 1_000_000 },
+  r: { min: 0, max: 1 },
+  f: { min: 1, max: 1439 },
+} as const;
+
+export interface HsportalLevelSetting {
+  /**
+   * e enable, t expiry (min), i/o idle timeout on + minutes, d max devices
+   * (0 unlimited), b bandwidth limit, ru/tu download/upload unit (0 kbps,
+   * 1 mbps), U/D upload/download limit, s/n session limit + max sessions,
+   * r/f reconnection restriction + block minutes.
+   */
+  readonly flag: keyof typeof LEVEL_FLAGS;
+  readonly value: number;
+}
+
+export interface HsportalLevelSetInput {
+  readonly profile: number;
+  readonly settings: readonly HsportalLevelSetting[];
+  /** `-g HH:MM`: daily time before which the same user may not reconnect. */
+  readonly reconnectAt?: string;
+}
+
+export const hsportalLevelSet = defineRawOperation<HsportalLevelSetInput>(
+  "cli.hsportal.level.set",
+  "write",
+  (input) => {
+    assertIntegerInRange(input.profile, 1, 20, "profile");
+    const parts = input.settings.map(({ flag, value }) => {
+      const range = Object.hasOwn(LEVEL_FLAGS, flag) ? LEVEL_FLAGS[flag] : undefined;
+
+      if (range === undefined) {
+        throw new InvalidInputError(
+          `flag must be one of ${Object.keys(LEVEL_FLAGS).join(", ")} (got "${flag}").`,
+        );
+      }
+
+      assertIntegerInRange(value, range.min, range.max, `-${flag}`);
+      return `-${flag} ${String(value)}`;
+    });
+
+    if (input.reconnectAt !== undefined) {
+      if (!/^(0[1-9]|1\d|2[0-3]):[0-5]\d$/.test(input.reconnectAt)) {
+        throw new InvalidInputError(
+          `reconnectAt must be HH:MM with HH 01..23 (got "${input.reconnectAt}").`,
+        );
+      }
+
+      parts.push(`-g ${input.reconnectAt}`);
+    }
+
+    if (parts.length === 0) {
+      throw new InvalidInputError("at least one setting is required.");
+    }
+
+    return `hsportal level -p ${String(input.profile)} ${parts.join(" ")}`;
+  },
+);
+
+export interface HsportalLevelDeleteInput {
+  readonly profile: number;
+}
+
+export const hsportalLevelDelete = defineRawOperation<HsportalLevelDeleteInput>(
+  "cli.hsportal.level.delete",
+  "write",
+  (input) => {
+    assertIntegerInRange(input.profile, 1, 20, "profile");
+    return `hsportal level -c ${String(input.profile)}`;
+  },
+);
+
 export const operations: readonly TypedOperation<never, unknown>[] = [
   hsportalSetup,
   hsportalInfo,
   hsportalLevel,
+  hsportalInfoSet,
+  hsportalInfoClear,
+  hsportalLevelSet,
+  hsportalLevelDelete,
 ];

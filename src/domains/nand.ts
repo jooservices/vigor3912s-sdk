@@ -28,15 +28,10 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseUsage } from "../internal/parsers/nand/usage.js";
 import type { RawCommandOutput } from "../internal/parsers/nand/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
+import { firstExchangeText } from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.nand.bad.nand.usage -- `nand bad` / `nand usage` (rawLine 11996) --

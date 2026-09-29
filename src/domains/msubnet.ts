@@ -39,8 +39,8 @@
  * assignment note).
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseSwitch } from "../internal/parsers/msubnet/switchOp.js";
 import { parseAddr } from "../internal/parsers/msubnet/addr.js";
@@ -63,6 +63,13 @@ import { parseTftp } from "../internal/parsers/msubnet/tftp.js";
 import { parseMtu } from "../internal/parsers/msubnet/mtu.js";
 import { parseLeasetime } from "../internal/parsers/msubnet/leasetime.js";
 import type { RawCommandOutput } from "../internal/parsers/msubnet/shared.js";
+import {
+  assertCliValue,
+  assertIntegerInRange,
+  assertIpv4,
+  assertOneOf,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 /** `msubnet <sub-command> <2/3/.../100>` -- documented across almost every heading in this family (LAN2..LAN100; LAN1 is outside `msubnet`'s scope). */
 const LAN_INDEX_MIN = 2;
@@ -71,56 +78,6 @@ const LAN_INDEX_MAX = 100;
 /** `msubnet talk`/`msubnet leasetime` document `<1/../100>` instead (LAN1..LAN100). */
 const TALK_LEASETIME_INDEX_MIN = 1;
 const TALK_LEASETIME_INDEX_MAX = 100;
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-const IPV4_PATTERN = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-
-function assertIpv4(value: string, name: string): void {
-  if (!IPV4_PATTERN.test(value)) {
-    throw new Error(`${name} must be a valid IPv4 address (got "${value}").`);
-  }
-}
-
-function assertNonEmptyString(value: string, name: string): void {
-  if (value.trim().length === 0) {
-    throw new Error(`${name} must not be empty.`);
-  }
-}
-
-/**
- * Generic runtime membership check for narrow string/number-literal-union
- * inputs (mirrors `wan.ts`'s `assertOneOf`: declared generically so
- * `@typescript-eslint/no-unnecessary-condition` doesn't flag it as
- * statically-impossible against well-behaved callers, while still validating
- * plain-JS/test callers that don't honor the literal type).
- */
-function assertOneOf<T>(value: T, allowed: readonly T[], name: string): void {
-  if (!allowed.includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => JSON.stringify(entry)).join(", ")} (got ${JSON.stringify(value)}).`,
-    );
-  }
-}
 
 function lanIndex(input: { readonly lanIndex: number }): void {
   assertIntegerInRange(input.lanIndex, LAN_INDEX_MIN, LAN_INDEX_MAX, "lanIndex");
@@ -492,7 +449,7 @@ export interface MsubnetTftpInput {
 
 function buildTftpFrames(input: MsubnetTftpInput): readonly CommandFrame[] {
   lanIndex(input);
-  assertNonEmptyString(input.serverName, "serverName");
+  assertCliValue(input.serverName, "serverName");
 
   return [frameSingleCommand(`msubnet tftp ${String(input.lanIndex)} ${input.serverName}`)];
 }
@@ -520,7 +477,7 @@ export interface MsubnetMtuInput {
 
 function buildMtuFrames(input: MsubnetMtuInput): readonly CommandFrame[] {
   if (!MTU_INTERFACE_PATTERN.test(input.interfaceName)) {
-    throw new Error(
+    throw new InvalidInputError(
       `interfaceName must be "LAN1".."LAN100", "IP_Routed_Subnet", or "DMZ" (got "${input.interfaceName}").`,
     );
   }

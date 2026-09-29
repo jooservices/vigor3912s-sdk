@@ -29,20 +29,20 @@ describe("cli.linux.setlinuxip operation", () => {
     // Rejection cases.
     expect(() => buildFramesOf({ ip: "" })).toThrow(/IP must not be empty/);
     expect(() => buildFramesOf({ ip: "198.51.100.5", cidr: 0 })).toThrow(
-      /CIDR must be an integer between 1 and 32/,
+      /CIDR must be between 1 and 32/,
     );
     expect(() => buildFramesOf({ ip: "198.51.100.5", cidr: 33 })).toThrow(
-      /CIDR must be an integer between 1 and 32/,
+      /CIDR must be between 1 and 32/,
     );
     expect(() => buildFramesOf({ ip: "198.51.100.5", vlan: -1 })).toThrow(
-      /VLAN must be an integer between 0 and 99/,
+      /VLAN must be between 0 and 99/,
     );
     expect(() => buildFramesOf({ ip: "198.51.100.5", vlan: 100 })).toThrow(
-      /VLAN must be an integer between 0 and 99/,
+      /VLAN must be between 0 and 99/,
     );
     // A value containing a disallowed framing sequence is rejected by
     // `frameSingleCommand`, not silently accepted.
-    expect(() => buildFramesOf({ ip: "198.51.100.5;rm-rf" })).toThrow(/disallowed sequence/);
+    expect(() => buildFramesOf({ ip: "198.51.100.5;rm-rf" })).toThrow(/shell metacharacters/);
   });
 
   it("(2) parses sample output into a minimal acknowledgement shape", () => {

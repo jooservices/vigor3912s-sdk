@@ -13,32 +13,14 @@
  * `internal/parsers/portmaptime/*.ts`.
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseList } from "../internal/parsers/portmaptime/list.js";
 import { parseFlush } from "../internal/parsers/portmaptime/flush.js";
 import { parseSet } from "../internal/parsers/portmaptime/set.js";
 import type { RawCommandOutput } from "../internal/parsers/portmaptime/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertPositiveInteger(value: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value <= 0) {
-    throw new Error(`${name} must be a positive integer (got ${String(value)}).`);
-  }
-}
+import { firstExchangeText, assertPositiveInteger } from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.portmaptime.l -- `portmaptime -l` (rawLine 6417) -- read
@@ -113,7 +95,7 @@ function buildSetFrames(input: PortmaptimeSetInput): readonly CommandFrame[] {
   }
 
   if (parts.length === 1) {
-    throw new Error("At least one portmaptime timeout option must be provided.");
+    throw new InvalidInputError("At least one portmaptime timeout option must be provided.");
   }
 
   return [frameSingleCommand(parts.join(" "))];

@@ -19,7 +19,6 @@
  */
 
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
-import type { CommandExchange } from "../internal/execution/transport.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseSet } from "../internal/parsers/vigbrg/set.js";
 import { parseStatus, type VigbrgStatusReport } from "../internal/parsers/vigbrg/status.js";
@@ -28,63 +27,12 @@ import { parseWlanStatus } from "../internal/parsers/vigbrg/wlanstatus.js";
 import { parseCloseall } from "../internal/parsers/vigbrg/closeall.js";
 import { parseCfgip } from "../internal/parsers/vigbrg/cfgip.js";
 import type { RawCommandOutput, VigbrgMacTableReport } from "../internal/parsers/vigbrg/shared.js";
-
-function firstExchangeText(exchanges: readonly unknown[]): string {
-  const [first] = exchanges as readonly CommandExchange[];
-  return first?.stdout ?? "";
-}
-
-function assertInteger(value: number, name: string): void {
-  if (!Number.isInteger(value)) {
-    throw new Error(`${name} must be an integer (got ${String(value)}).`);
-  }
-}
-
-function assertIntegerInRange(value: number, min: number, max: number, name: string): void {
-  assertInteger(value, name);
-
-  if (value < min || value > max) {
-    throw new Error(
-      `${name} must be between ${String(min)} and ${String(max)} (got ${String(value)}).`,
-    );
-  }
-}
-
-/**
- * Generic runtime membership check for narrow string/number-literal-union
- * inputs, mirroring the sibling `wan` domain's own `assertOneOf`
- * (`src/domains/wan.ts`) -- declared generically rather than as direct
- * `!==` comparisons so `@typescript-eslint/no-unnecessary-condition` doesn't
- * flag it as statically-impossible for well-typed callers, while still
- * validating callers (plain-JS, tests) that don't honor the literal type.
- */
-function assertOneOf<T>(value: T, allowed: readonly T[], name: string): void {
-  if (!allowed.includes(value)) {
-    throw new Error(
-      `${name} must be one of ${allowed.map((entry) => JSON.stringify(entry)).join(", ")} (got ${JSON.stringify(value)}).`,
-    );
-  }
-}
-
-const SINGLE_CLI_TOKEN_PATTERN = /^\S+$/;
-
-function assertSingleToken(value: string, name: string): void {
-  if (!SINGLE_CLI_TOKEN_PATTERN.test(value)) {
-    throw new Error(
-      `${name} must be a single non-empty token with no whitespace (got "${value}").`,
-    );
-  }
-}
-
-const IPV4_PATTERN = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
-
-function assertIpv4(value: string, name: string): void {
-  assertSingleToken(value, name);
-
-  if (!IPV4_PATTERN.test(value)) {
-    throw new Error(`${name} must be an IPv4 address (got "${value}").`);
-  }
-}
+import {
+  assertIntegerInRange,
+  assertIpv4,
+  assertOneOf,
+  firstExchangeText,
+} from "../internal/domain-support.js";
 
 // ---------------------------------------------------------------------------
 // cli.vigbrg.set -- `vigbrg set -v <4/6> -w <WAN_idx> -l <LAN_idx> -e <0/1>

@@ -6,10 +6,8 @@
  * return the trimmed raw text (YAGNI).
  */
 
-export interface SysFrLog {
-  readonly raw: string;
-}
+import { parseRawText, type RawCommandOutput } from "../raw-text.js";
 
-export function parseSysFrLog(text: string): SysFrLog {
-  return { raw: text.trim() };
-}
+export type SysFrLog = RawCommandOutput;
+
+export const parseSysFrLog: (text: string) => SysFrLog = parseRawText;

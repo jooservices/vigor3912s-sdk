@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 
-export const redactionRuleVersion = "fixture-redaction-v1" as const;
+export const redactionRuleVersion = "fixture-redaction-v2" as const;
 
 export interface RedactedFixture {
   readonly content: string;
@@ -41,10 +41,12 @@ export class FixtureRedactionValidationError extends Error {
 
 const ipv4Pattern =
   /\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b/g;
-const macPattern = /\b[0-9a-f]{2}(?::[0-9a-f]{2}){5}\b/gi;
+/** MAC in colon or dash (DrayOS), dotted, or bare 12-hex-digit notation. */
+const macPattern =
+  /\b(?:[0-9a-f]{2}([:-])(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}|[0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4}|[0-9a-f]{12})\b/gi;
 const domainPattern = /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\b/gi;
 const labeledValuePattern =
-  /(?<prefix>\b(?:api[-_ ]?key|auth(?:orization)?|cookie|key|pass(?:word|wd)?|pwd|session|token)\b\s*[:=]\s*["']?(?:(?:basic|bearer|digest|token)\s+)?)(?<value>[^\s"',;]+)/giu;
+  /(?<prefix>\b(?:api[-_ ]?key|auth(?:orization)?|community|cookie|key|pass(?:word|wd|phrase)?|pre[-_ ]?shared[-_ ]?key|psk|pwd|secret|session|token)\b\s*[:=]\s*["']?(?:(?:basic|bearer|digest|token)\s+)?)(?<value>[^\s"',;]+)/giu;
 const hostLabelPattern =
   /(?<prefix>\b(?:domain|fqdn|host(?:name)?|server[-_ ]?name)\b\s*[:=]\s*["']?)(?<value>[^\s"',;]+)/giu;
 const ipv6CandidatePattern = /\b[0-9a-f:.]{3,}\b/gi;
