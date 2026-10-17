@@ -293,7 +293,7 @@ const mngtAccesslist: TypedOperation<MngtAccesslistInput, MngtAck> = {
   buildFrames: (input) => {
     assertArgsShape(input.args, "mngt accesslist");
     const [subcommand] = input.args;
-    assertOneOf(subcommand ?? "", MNGT_ACCESSLIST_SUBCOMMANDS, "mngt accesslist subcommand");
+    assertOneOf(subcommand, MNGT_ACCESSLIST_SUBCOMMANDS, "mngt accesslist subcommand");
     return [frameSingleCommand(`mngt accesslist ${input.args.join(" ")}`)];
   },
   parse: (exchanges) => parseMngtAck(firstExchangeText(exchanges)),

@@ -32,17 +32,17 @@ export function parseShowOpenport(text: string): ShowOpenportResult {
     if (rowMatch !== null) {
       const [, index, status, comment, localIp] = rowMatch;
       entries.push({
-        index: Number(index ?? 0),
-        status: status ?? "",
-        comment: comment ?? "",
-        localIp: localIp ?? "",
+        index: Number(index),
+        status: status as string,
+        comment: comment as string,
+        localIp: localIp as string,
       });
       continue;
     }
 
     const totalMatch = TOTAL_PATTERN.exec(line);
     if (totalMatch !== null) {
-      totalItems = Number(totalMatch[1] ?? 0);
+      totalItems = Number(totalMatch[1]);
     }
   }
 

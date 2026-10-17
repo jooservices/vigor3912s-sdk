@@ -74,7 +74,7 @@ export function extractSyntaxForms(rawText: string): readonly SyntaxForm[] {
       return;
     }
 
-    const firstWord = heading.split(/\s+/)[0]?.toLowerCase() ?? "";
+    const firstWord = (heading.split(/\s+/)[0] as string).toLowerCase();
     const previous = forms.at(-1);
 
     // A wrapped form continues on the next line: a leading `<`/`[`/`/`/`|`/

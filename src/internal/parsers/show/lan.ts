@@ -30,14 +30,14 @@ export function parseShowLan(text: string): ShowLanResult {
     const [, enabledFlag, index, ipAddress, mask, dhcpFlag, dhcpStartIp, poolSize, gateway] = match;
 
     entries.push({
-      interfaceName: `LAN${index ?? ""}`,
+      interfaceName: `LAN${index as string}`,
       enabled: enabledFlag === "V",
-      ipAddress: ipAddress ?? "",
-      mask: mask ?? "",
+      ipAddress: ipAddress as string,
+      mask: mask as string,
       dhcpEnabled: dhcpFlag === "V",
-      dhcpStartIp: dhcpStartIp ?? "",
-      poolSize: Number(poolSize ?? 0),
-      gateway: gateway ?? "",
+      dhcpStartIp: dhcpStartIp as string,
+      poolSize: Number(poolSize),
+      gateway: gateway as string,
     });
   }
 

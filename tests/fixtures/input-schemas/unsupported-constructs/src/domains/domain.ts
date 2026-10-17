@@ -64,9 +64,38 @@ const nonObjectIntersectionOp: TypedOperation<NonObjectIntersection, unknown> = 
   parse: () => undefined,
 };
 
+const emptyTupleOp: TypedOperation<readonly [], unknown> = {
+  manifestId: "fixture.empty-tuple",
+  classification: "read",
+  buildFrames: (input) => input,
+  parse: () => undefined,
+};
+
+const functionInputOp: TypedOperation<(value: string) => void, unknown> = {
+  manifestId: "fixture.function-input",
+  classification: "read",
+  buildFrames: (input) => input,
+  parse: () => undefined,
+};
+
+const notAnOperation = 1 as never;
+
+type MappedInput = { readonly [Field in "first" | "second"]: string };
+
+const mappedOp: TypedOperation<MappedInput, unknown> = {
+  manifestId: "fixture.mapped",
+  classification: "read",
+  buildFrames: (input) => input,
+  parse: () => undefined,
+};
+
 export const operations: readonly TypedOperation<never, unknown>[] = [
   indexSignatureOp,
   unknownOp,
   heterogeneousTupleOp,
   nonObjectIntersectionOp,
+  emptyTupleOp,
+  functionInputOp,
+  notAnOperation,
+  mappedOp,
 ];

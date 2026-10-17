@@ -27,12 +27,9 @@ export function parseSysCmdLog(text: string): SysCmdLog {
   const entries: SysCmdLogEntry[] = [];
 
   for (const match of text.matchAll(ENTRY_PATTERN)) {
-    const indexText = match.groups?.index;
-    const command = match.groups?.command;
-
-    if (indexText === undefined || command === undefined) {
-      continue;
-    }
+    const groups = match.groups as { readonly index: string; readonly command: string };
+    const indexText = groups.index;
+    const command = groups.command;
 
     entries.push({ index: Number.parseInt(indexText, 10), command });
   }

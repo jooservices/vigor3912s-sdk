@@ -37,28 +37,15 @@ export function parseSwitchList(text: string): SwitchListReport {
     const [, indexText, mac, ip, status, durationTime, cwmp, acsCtl, modelName, firmwareVersion] =
       match;
 
-    if (
-      indexText === undefined ||
-      mac === undefined ||
-      ip === undefined ||
-      status === undefined ||
-      durationTime === undefined ||
-      cwmp === undefined ||
-      acsCtl === undefined ||
-      modelName === undefined
-    ) {
-      continue;
-    }
-
     devices.push({
       index: Number(indexText),
-      mac,
-      ip,
-      status,
-      durationTime,
-      cwmp,
-      acsCtl,
-      modelName,
+      mac: mac as string,
+      ip: ip as string,
+      status: status as string,
+      durationTime: durationTime as string,
+      cwmp: cwmp as string,
+      acsCtl: acsCtl as string,
+      modelName: modelName as string,
       firmwareVersion,
     });
   }

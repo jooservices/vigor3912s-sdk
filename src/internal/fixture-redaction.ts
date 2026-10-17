@@ -122,9 +122,8 @@ function replaceLabeledValues(
   counts: RedactionCounts,
 ): string {
   return content.replace(pattern, (...args: unknown[]): string => {
-    const groups = args.at(-1) as { prefix?: string; value?: string };
-    const prefix = groups.prefix ?? "";
-    const value = groups.value ?? "";
+    const groups = args.at(-1) as { prefix: string; value: string };
+    const { prefix, value } = groups;
 
     if (value === "" || isAllowedReplacement(value)) {
       return `${prefix}${value}`;
@@ -247,7 +246,7 @@ function countLabeledValues(content: string): number {
   labeledValuePattern.lastIndex = 0;
 
   return Array.from(content.matchAll(labeledValuePattern)).filter((match) => {
-    const value = match.groups?.value ?? "";
+    const value = (match.groups as { readonly value: string }).value;
 
     return value !== "" && !isAllowedReplacement(value);
   }).length;
@@ -257,7 +256,7 @@ function countHostLabeledValues(content: string): number {
   hostLabelPattern.lastIndex = 0;
 
   return Array.from(content.matchAll(hostLabelPattern)).filter((match) => {
-    const value = match.groups?.value ?? "";
+    const value = (match.groups as { readonly value: string }).value;
 
     return value !== "" && !isAllowedReplacement(value);
   }).length;

@@ -91,27 +91,23 @@ function assertInterfaceLabel(value: string, name: string): void {
 /**
  * `ip6 addr -s`/`-d` also accept `VPN1`..`VPN500` (rawLine 2060).
  */
-function assertAddrInterface(value: string, name: string, allowVpn: boolean): void {
+function assertAddrInterface(value: string, name: string): void {
   if (INTERFACE_LABEL_PATTERN.test(value)) {
     return;
   }
 
-  if (allowVpn) {
-    const match = /^VPN(\d+)$/.exec(value);
+  const match = /^VPN(\d+)$/.exec(value);
 
-    if (match !== null) {
-      const vpnNumber = Number(match[1]);
+  if (match !== null) {
+    const vpnNumber = Number(match[1]);
 
-      if (vpnNumber >= 1 && vpnNumber <= 500) {
-        return;
-      }
+    if (vpnNumber >= 1 && vpnNumber <= 500) {
+      return;
     }
   }
 
-  const vpnHint = allowVpn ? ', or "VPN1".."VPN500"' : "";
-
   throw new InvalidInputError(
-    `${name} must match "LAN1".."LAN100" or "WAN1".."WAN10"${vpnHint} (got "${value}").`,
+    `${name} must match "LAN1".."LAN100", "WAN1".."WAN10", or "VPN1".."VPN500" (got "${value}").`,
   );
 }
 
@@ -312,7 +308,7 @@ function buildAddrFrames(input: Ip6AddrInput): readonly CommandFrame[] {
     case "set": {
       assertIpv6(input.prefix, "prefix");
       assertIntegerInRange(input.prefixLength, 0, 128, "prefixLength");
-      assertAddrInterface(input.interfaceLabel, "interfaceLabel", true);
+      assertAddrInterface(input.interfaceLabel, "interfaceLabel");
 
       return [
         frameSingleCommand(
@@ -323,7 +319,7 @@ function buildAddrFrames(input: Ip6AddrInput): readonly CommandFrame[] {
     case "delete": {
       assertIpv6(input.prefix, "prefix");
       assertIntegerInRange(input.prefixLength, 0, 128, "prefixLength");
-      assertAddrInterface(input.interfaceLabel, "interfaceLabel", true);
+      assertAddrInterface(input.interfaceLabel, "interfaceLabel");
 
       return [
         frameSingleCommand(
@@ -335,7 +331,7 @@ function buildAddrFrames(input: Ip6AddrInput): readonly CommandFrame[] {
       const parts = ["ip6 addr -a"];
 
       if (input.interfaceLabel !== undefined) {
-        assertAddrInterface(input.interfaceLabel, "interfaceLabel", true);
+        assertAddrInterface(input.interfaceLabel, "interfaceLabel");
         parts.push(input.interfaceLabel);
       }
 

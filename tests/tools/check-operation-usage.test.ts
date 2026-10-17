@@ -79,7 +79,9 @@ describe("tools/check-operation-usage", () => {
       ),
     ).resolves.toBe(false);
     expect(error).toHaveBeenCalledWith(expect.stringMatching(/y: buildFrames, parse/));
-  });
+
+    await expect(main(directory)).resolves.toBe(false);
+  }, 30_000);
 });
 
 describe("syntax-form census", () => {

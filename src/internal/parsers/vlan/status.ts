@@ -52,24 +52,13 @@ export function parseVlanStatus(text: string): VlanStatusReport {
 
     const [, channel, state, vid, priority, ports, subnet] = rowMatch;
 
-    if (
-      channel === undefined ||
-      state === undefined ||
-      vid === undefined ||
-      priority === undefined ||
-      ports === undefined ||
-      subnet === undefined
-    ) {
-      continue;
-    }
-
     channels.push({
       channel: Number(channel),
       enabled: state === "ON",
       vid: Number(vid),
       priority: Number(priority),
-      ports: ports.trim(),
-      subnet,
+      ports: (ports as string).trim(),
+      subnet: subnet as string,
     });
   }
 

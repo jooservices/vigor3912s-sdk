@@ -79,6 +79,10 @@ describeOperation({
       { action: "set", serverIp: "1.2.3.4", serverPort: 8888, enabled: true },
       "vpn udp set 1.2.3.4 8888 enable",
     ],
+    [
+      { action: "set", serverIp: "1.2.3.4", serverPort: 8888, enabled: false },
+      "vpn udp set 1.2.3.4 8888 disable",
+    ],
     [{ action: "clear", host: "udp.aabbccdd.local" }, "vpn udp clear udp.aabbccdd.local"],
   ],
   invalid: [
@@ -265,6 +269,7 @@ describeOperation({
   classification: "write",
   valid: [
     [{ option: "enable", enabled: true }, "wan voipdect -e 1"],
+    [{ option: "enable", enabled: false }, "wan voipdect -e 0"],
     [{ option: "threshold", mos: 3.5 }, "wan voipdect -t 3.5"],
     [{ option: "better", mos: 0.3 }, "wan voipdect -b 0.3"],
     [{ option: "debugWan", wan: 2 }, "wan voipdect -d 2"],
@@ -300,7 +305,10 @@ describeOperation({
 describeOperation({
   operation: sys.sysPwenc,
   classification: "write",
-  valid: [[{ enabled: true }, "sys pwenc -e 1"]],
+  valid: [
+    [{ enabled: true }, "sys pwenc -e 1"],
+    [{ enabled: false }, "sys pwenc -e 0"],
+  ],
 });
 describeOperation({
   operation: sys.sysCon2tel,
@@ -310,7 +318,10 @@ describeOperation({
 describeOperation({
   operation: sys.sysMpage,
   classification: "write",
-  valid: [[{ enabled: false }, "sys mpage disable"]],
+  valid: [
+    [{ enabled: false }, "sys mpage disable"],
+    [{ enabled: true }, "sys mpage enable"],
+  ],
 });
 describeOperation({
   operation: sys.sysIpfixNetflowStatus,
@@ -322,6 +333,7 @@ describeOperation({
   classification: "write",
   valid: [
     [{ setting: "enable", enabled: true }, "sys ipfix_netflow enable 1"],
+    [{ setting: "enable", enabled: false }, "sys ipfix_netflow enable 0"],
     [
       { setting: "collector_ip", address: "192.168.1.10" },
       "sys ipfix_netflow collector_ip 192.168.1.10",
@@ -342,7 +354,10 @@ describeOperation({
 describeOperation({
   operation: ip.ipIgmpFl,
   classification: "write",
-  valid: [[{ enabled: true }, "ip igmp_fl enable"]],
+  valid: [
+    [{ enabled: true }, "ip igmp_fl enable"],
+    [{ enabled: false }, "ip igmp_fl disable"],
+  ],
 });
 describeOperation({
   operation: ip.ipIgmpFlStatus,

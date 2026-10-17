@@ -91,4 +91,12 @@ describe("cli.show.status operation", () => {
       wans: [],
     });
   });
+
+  it("treats a missing first exchange as empty parser input", () => {
+    expect(findOperation().parse([])).toEqual({
+      systemUptime: null,
+      lan: { primaryDns: null, secondaryDns: null, ipAddress: null, txRate: null, rxRate: null },
+      wans: [],
+    });
+  });
 });

@@ -33,6 +33,12 @@ describe("cli.ip6.lan", () => {
         ip6Lan.buildFrames({ action: "set", lan: 2, otherOption: false, disableIpv6: true }),
       ).command,
     ).toBe("ip6 lan -l 2 -o 0 -f 1");
+    expect(firstFrame(ip6Lan.buildFrames({ action: "set", lan: 2, ripng: false })).command).toBe(
+      "ip6 lan -l 2 -R 0",
+    );
+    expect(firstFrame(ip6Lan.buildFrames({ action: "set", lan: 2, ripng: true })).command).toBe(
+      "ip6 lan -l 2 -R 1",
+    );
   });
 
   it("parses the documented acknowledgement text (synthetic sample)", () => {

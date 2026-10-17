@@ -41,6 +41,7 @@ const rangedOp: TypedOperation<RangedInput, unknown> = {
     assertIntegerInRange(input.ranged, 1, MAX_SLOT, "ranged");
     assertPositiveInteger(input.positive, "positive");
     assertInteger(input.integerOnly, "integerOnly");
+    assertInteger(Reflect.get(input, "unannotated") as number, "missing declaration is ignored");
     return input;
   },
   parse: () => undefined,
@@ -73,6 +74,7 @@ const sharedHighOp: TypedOperation<SharedInput, unknown> = {
 interface SentinelInput {
   readonly timeout: number;
   readonly other: number;
+  readonly conflicting: number;
 }
 
 const sentinelOp: TypedOperation<SentinelInput, unknown> = {
@@ -81,10 +83,17 @@ const sentinelOp: TypedOperation<SentinelInput, unknown> = {
   buildFrames: (input) => {
     if (input.timeout !== -1) {
       assertIntegerInRange(input.timeout, 1, 999, "timeout");
+      assertIntegerInRange(input.timeout, 1, 999, "same sentinel merges");
     }
     // A different property's comparison exempts nothing.
     if (input.timeout !== 0) {
       assertIntegerInRange(input.other, 1, 5, "other");
+    }
+    if (input.conflicting !== -1) {
+      assertIntegerInRange(input.conflicting, 1, 5, "first sentinel");
+    }
+    if (input.conflicting !== -2) {
+      assertIntegerInRange(input.conflicting, 1, 5, "different sentinel");
     }
     return input;
   },

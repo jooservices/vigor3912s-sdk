@@ -110,6 +110,25 @@ describe("DefaultCommandRunner hard timeout (transport ignores AbortSignal)", ()
     await expect(runner.run("show status")).rejects.toThrow("broken pipe");
     expect(transport.closeReasons).toEqual([]);
   });
+
+  it("observes an abort that lands during transport readiness", async () => {
+    const controller = new AbortController();
+    const close = vi.fn(() => Promise.resolve());
+    const transport: Transport = {
+      get isOpen() {
+        controller.abort("aborted during readiness check");
+        return true;
+      },
+      send: () => neverSettles(),
+      close,
+    };
+    const runner = new DefaultCommandRunner(transport);
+
+    await expect(runner.run("show status", { signal: controller.signal })).rejects.toThrow(
+      "aborted during readiness check",
+    );
+    expect(close).toHaveBeenCalledWith("aborted");
+  });
 });
 
 describe("DefaultCommandRunner streaming transport", () => {
@@ -161,6 +180,73 @@ describe("DefaultCommandRunner streaming transport", () => {
     expect(produced).toBe(3);
     expect(transport.returned).toBe(true);
     expect(transport.closeReasons).toEqual(["output_limit_exceeded"]);
+  });
+
+  it("absorbs a rejected iterator cleanup after an oversized chunk", async () => {
+    const chunks: AsyncIterable<TransportChunk> = {
+      [Symbol.asyncIterator]() {
+        return {
+          next: () =>
+            Promise.resolve({ done: false, value: { stream: "stdout", data: "oversized" } }),
+          return: () => Promise.reject(new Error("iterator cleanup failed")),
+        };
+      },
+    };
+    const transport: Transport = {
+      isOpen: true,
+      send: () => neverSettles(),
+      stream: () => chunks,
+      close: () => Promise.resolve(),
+    };
+    const runner = new DefaultCommandRunner(transport, {
+      ...defaultExecutionLimits,
+      maxOutputBytes: 1,
+    });
+
+    await expect(runner.run("show status")).rejects.toMatchObject({
+      code: "output_limit_exceeded",
+    });
+    await Promise.resolve();
+  });
+
+  it("absorbs a rejected transport close after output overflow", async () => {
+    const close = vi.fn(() => Promise.reject(new Error("transport close failed")));
+    const transport: Transport = {
+      isOpen: true,
+      send: () => Promise.resolve({ stdout: "oversized", stderr: "" }),
+      close,
+    };
+    const runner = new DefaultCommandRunner(transport, {
+      ...defaultExecutionLimits,
+      maxOutputBytes: 1,
+    });
+
+    await expect(runner.run("show status")).rejects.toMatchObject({
+      code: "output_limit_exceeded",
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(close).toHaveBeenCalledWith("output_limit_exceeded");
+  });
+
+  it("rejects if a stream implementation disappears before collection starts", async () => {
+    let reads = 0;
+    const transport: Transport = {
+      isOpen: true,
+      send: () => neverSettles(),
+      close: () => Promise.resolve(),
+      stream: async function* () {},
+    };
+    Object.defineProperty(transport, "stream", {
+      get() {
+        reads += 1;
+        return reads === 1 ? async function* () {} : undefined;
+      },
+    });
+    const runner = new DefaultCommandRunner(transport);
+
+    await expect(runner.run("show status")).rejects.toThrow(
+      "Transport.stream disappeared during dispatch.",
+    );
   });
 
   it("enforces idleTimeoutMs between chunks and invalidates the session", async () => {

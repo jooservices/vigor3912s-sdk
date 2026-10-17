@@ -53,38 +53,20 @@ export function parseWanStatus(text: string): WanStatusReport {
     const primaryDns = match[12];
     const secondaryDns = match[13];
 
-    if (
-      interfaceLabel === undefined ||
-      onlineText === undefined ||
-      stallText === undefined ||
-      mode === undefined ||
-      upTime === undefined ||
-      ipAddress === undefined ||
-      gatewayIp === undefined ||
-      txPackets === undefined ||
-      txRateBps === undefined ||
-      rxPackets === undefined ||
-      rxRateBps === undefined ||
-      primaryDns === undefined ||
-      secondaryDns === undefined
-    ) {
-      continue;
-    }
-
     interfaces.push({
-      interfaceLabel,
+      interfaceLabel: interfaceLabel as string,
       online: onlineText === "Online",
       stall: stallText === "Y",
-      mode: mode.trim(),
-      upTime: upTime.trim(),
-      ipAddress: ipAddress.trim(),
-      gatewayIp: gatewayIp.trim(),
+      mode: (mode as string).trim(),
+      upTime: (upTime as string).trim(),
+      ipAddress: (ipAddress as string).trim(),
+      gatewayIp: (gatewayIp as string).trim(),
       txPackets: Number(txPackets),
       txRateBps: Number(txRateBps),
       rxPackets: Number(rxPackets),
       rxRateBps: Number(rxRateBps),
-      primaryDns: primaryDns.trim(),
-      secondaryDns: secondaryDns.trim(),
+      primaryDns: (primaryDns as string).trim(),
+      secondaryDns: (secondaryDns as string).trim(),
     });
   }
 

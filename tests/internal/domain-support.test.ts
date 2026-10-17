@@ -6,8 +6,11 @@ import {
   assertMac,
   assertOneOf,
   assertParamTail,
+  assertNonEmptyToken,
   assertSingleToken,
+  assertTupleLength,
   assertTrailingText,
+  defineRawOperation,
 } from "../../src/internal/domain-support.js";
 
 function messageOf(action: () => void): string {
@@ -48,6 +51,44 @@ describe("assertSingleToken", () => {
     expect(() => {
       assertSingleToken("p@ss-w0rd", "password");
     }).not.toThrow();
+  });
+});
+
+describe("assertNonEmptyToken", () => {
+  it("rejects a double quote in a token", () => {
+    expect(
+      messageOf(() => {
+        assertNonEmptyToken('a"b', "field");
+      }),
+    ).toMatch(/double quote/);
+  });
+});
+
+describe("assertTupleLength", () => {
+  it("accepts the required length and rejects short or long tuples", () => {
+    expect(() => {
+      assertTupleLength([1, 2], 2, "values");
+    }).not.toThrow();
+    expect(() => {
+      assertTupleLength([1], 2, "values");
+    }).toThrow(/exactly 2 entries/);
+    expect(() => {
+      assertTupleLength([1, 2, 3], 2, "values");
+    }).toThrow(/got 3/);
+  });
+});
+
+describe("defineRawOperation", () => {
+  it("supports zero-argument builders and input-taking builders", () => {
+    const noInput = defineRawOperation<undefined>("test.no-input", "read", () => "show version");
+    const withInput = defineRawOperation<{ readonly id: number }>(
+      "test.with-input",
+      "read",
+      (input) => `show item ${String(input.id)}`,
+    );
+
+    expect(noInput.buildFrames(undefined)[0]?.command).toBe("show version");
+    expect(withInput.buildFrames({ id: 2 })[0]?.command).toBe("show item 2");
   });
 });
 

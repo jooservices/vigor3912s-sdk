@@ -56,6 +56,10 @@ describeOperation({
       { setNo: 3, ruleNo: 1, action: "configure", options: [{ flag: "M", values: ["a b"] }] },
       /-M value #1/,
     ],
+    [
+      { setNo: 3, ruleNo: 1, action: "configure", options: [{ flag: "M", values: ['a"b'] }] },
+      /-M values must not contain double quotes/,
+    ],
   ],
 });
 

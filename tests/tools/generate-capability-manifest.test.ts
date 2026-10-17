@@ -442,5 +442,35 @@ describe("main (check mode against the committed artifacts)", () => {
     for (const [message] of log.mock.calls) {
       expect(String(message)).toMatch(/^manifest:check OK — /);
     }
+
+    await expect(main(["node", "tools/generate-capability-manifest.ts", "--check"])).resolves.toBe(
+      true,
+    );
+  }, 120_000);
+
+  it("rejects a registry operation without a generated input schema", async () => {
+    const missingOperation = {
+      manifestId: "fixture.missing-schema",
+      classification: "read" as const,
+      buildFrames: () => [],
+      parse: () => undefined,
+    };
+    const dependenciesWithOrphan = {
+      loadSelfAssembly: () =>
+        Promise.resolve({
+          ...selfAssembly,
+          buildSelfAssembledRegistry: () =>
+            new Map([[missingOperation.manifestId, missingOperation]]),
+          discoverDomainOperations: () => Promise.resolve([]),
+          listDomainModuleFiles: () => Promise.resolve([]),
+        }),
+      domainsImportDir: undefined,
+    };
+
+    await expect(
+      main(["node", "tools/generate-capability-manifest.ts", "--check"], dependenciesWithOrphan),
+    ).rejects.toThrow(
+      /Input schema \/ operation registry manifestId mismatch.*fixture\.missing-schema/s,
+    );
   }, 120_000);
 });

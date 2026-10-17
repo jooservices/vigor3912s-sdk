@@ -1,5 +1,6 @@
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
+import { runIfMain } from "./cli-entry.ts";
 type FixtureImporterModule = typeof import("../src/internal/fixture-importer.js");
 
 const sdkRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -14,6 +15,4 @@ export async function main(args: readonly string[] = process.argv.slice(2)): Pro
 }
 
 // Run only when executed as a script, not when imported by unit tests.
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await main();
-}
+await runIfMain(process.argv[1], import.meta.url, main);

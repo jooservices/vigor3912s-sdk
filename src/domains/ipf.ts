@@ -254,11 +254,11 @@ function renderIpfRuleOptions(options: readonly IpfRuleOption[]): string {
       assertOneOf(flag, IPF_RULE_FLAGS, "flag");
       const tokens = values.map((value, position) => {
         const text = String(value);
-        assertCliValue(text, `-${flag} value #${String(position + 1)}`);
-
         if (text.includes('"')) {
           throw new InvalidInputError(`-${flag} values must not contain double quotes.`);
         }
+
+        assertCliValue(text, `-${flag} value #${String(position + 1)}`);
 
         return text;
       });

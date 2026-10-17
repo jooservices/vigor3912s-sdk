@@ -35,7 +35,7 @@ export function parseShowSession(text: string): ShowSessionResult {
 
   for (const match of text.matchAll(WAN_USAGE_PATTERN)) {
     const [, wan, usage] = match;
-    wanUsage.push({ wan: Number(wan ?? 0), usage: Number(usage ?? 0) });
+    wanUsage.push({ wan: Number(wan), usage: Number(usage) });
   }
 
   return {

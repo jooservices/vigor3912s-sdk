@@ -26,7 +26,7 @@ export function parseShowDmz(text: string): ShowDmzResult {
   const entries: ShowDmzEntry[] = [];
 
   for (const [sectionIndex, header] of headerMatches.entries()) {
-    const wan = Number(header[1] ?? 0);
+    const wan = Number(header[1]);
     const sectionStart = header.index + header[0].length;
     const sectionEnd = headerMatches[sectionIndex + 1]?.index ?? text.length;
     const section = text.slice(sectionStart, sectionEnd);
@@ -42,9 +42,9 @@ export function parseShowDmz(text: string): ShowDmzResult {
 
       entries.push({
         wan,
-        index: Number(index ?? 0),
-        status: status ?? "",
-        auxIp: auxIpOrPrivateIp ?? "",
+        index: Number(index),
+        status: status as string,
+        auxIp: auxIpOrPrivateIp as string,
         privateIp: maybePrivateIp ?? null,
       });
     }

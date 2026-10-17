@@ -100,11 +100,7 @@ export function parseUpnpNat(text: string): UpnpNatReport {
     const nextHeaderMatch = headerMatches[position + 1];
     const blockEnd = nextHeaderMatch?.index ?? text.length;
     const block = text.slice(blockStart, blockEnd);
-    const indexText = headerMatch[1];
-
-    if (indexText === undefined) {
-      continue;
-    }
+    const indexText = headerMatch[1] as string;
 
     const entry = parseEntryBlock(Number.parseInt(indexText, 10), block);
 

@@ -44,8 +44,8 @@
  */
 
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 
+import { runBooleanCliIfMain } from "./cli-entry.ts";
 import type { CapabilityEntry } from "../src/manifest/types.js";
 // Runtime (non-type-only) import of a local module: `node
 // --experimental-strip-types` only strips types for `.ts` specifiers, so the
@@ -227,8 +227,4 @@ export async function main(
 
 // Run only when executed as a script (`node tools/generate-capability-manifest.ts`),
 // not when imported by unit tests.
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (!(await main())) {
-    process.exitCode = 1;
-  }
-}
+await runBooleanCliIfMain(process.argv[1], import.meta.url, main);

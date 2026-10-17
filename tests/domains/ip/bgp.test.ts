@@ -15,6 +15,9 @@ describe("cli.ip.bgp -- ip bgp", () => {
     expect(firstFrame(ipBgp.buildFrames({ action: "mode", enabled: true })).command).toBe(
       "ip bgp mode 1",
     );
+    expect(firstFrame(ipBgp.buildFrames({ action: "mode", enabled: false })).command).toBe(
+      "ip bgp mode 0",
+    );
     expect(firstFrame(ipBgp.buildFrames({ action: "as", asNumber: 65000 })).command).toBe(
       "ip bgp as 65000",
     );
@@ -30,6 +33,9 @@ describe("cli.ip.bgp -- ip bgp", () => {
     expect(
       firstFrame(ipBgp.buildFrames({ action: "neighborMode", idx: 1, enabled: true })).command,
     ).toBe("ip bgp neighbor 1 mode 1");
+    expect(
+      firstFrame(ipBgp.buildFrames({ action: "neighborMode", idx: 1, enabled: false })).command,
+    ).toBe("ip bgp neighbor 1 mode 0");
     expect(
       firstFrame(ipBgp.buildFrames({ action: "neighborName", idx: 1, name: "peer1" })).command,
     ).toBe("ip bgp neighbor 1 name peer1");
@@ -49,6 +55,9 @@ describe("cli.ip.bgp -- ip bgp", () => {
     expect(
       firstFrame(ipBgp.buildFrames({ action: "neighborMd5", idx: 1, enabled: false })).command,
     ).toBe("ip bgp neighbor 1 md5 0");
+    expect(
+      firstFrame(ipBgp.buildFrames({ action: "neighborMd5", idx: 1, enabled: true })).command,
+    ).toBe("ip bgp neighbor 1 md5 1");
     expect(
       firstFrame(ipBgp.buildFrames({ action: "neighborKey", idx: 1, key: "secret" })).command,
     ).toBe("ip bgp neighbor 1 key secret");

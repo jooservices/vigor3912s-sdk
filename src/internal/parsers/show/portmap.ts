@@ -51,16 +51,16 @@ export function parseShowPortmap(text: string): ShowPortmapResult {
     ] = match;
 
     entries.push({
-      protocol: Number(protocol ?? 0),
-      privateIp: privateIp ?? "",
-      privatePort: Number(privatePort ?? 0),
-      pseudoIp: pseudoIp ?? "",
-      pseudoPort: Number(pseudoPort ?? 0),
-      peerIp: peerIp ?? "",
-      peerPort: Number(peerPort ?? 0),
-      state: Number(state ?? 0),
-      lastTime: Number(lastTime ?? 0),
-      dpdk: Number(dpdk ?? 0),
+      protocol: Number(protocol),
+      privateIp: privateIp as string,
+      privatePort: Number(privatePort),
+      pseudoIp: pseudoIp as string,
+      pseudoPort: Number(pseudoPort),
+      peerIp: peerIp as string,
+      peerPort: Number(peerPort),
+      state: Number(state),
+      lastTime: Number(lastTime),
+      dpdk: Number(dpdk),
     });
   }
 

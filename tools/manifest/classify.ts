@@ -13,7 +13,6 @@ import {
   READ_ONLY_FAMILIES,
   SESSION_META_FAMILIES,
   SIBLING_LIVE_VERIFIED_CLASSIFICATION,
-  STREAMING_FAMILIES,
   WRITE_FAMILIES,
   WRITE_FAMILY_PREFIXES,
 } from "./classification-data.ts";
@@ -43,18 +42,6 @@ export function classifyCliCommand(title: string): ClassificationResult {
       classification: "destructive",
       classificationBasis: "operations-danger-list",
       status: "documented",
-    };
-  }
-
-  if (STREAMING_FAMILIES.has(key)) {
-    return {
-      classification: "unknown",
-      classificationBasis: "unclassified",
-      status: "blocked-by-documentation",
-      blockedReason:
-        'Documented as a continuous watch/tail-style command (e.g. "log -wt"); it does not ' +
-        "fit the bounded single-exchange execution model (ARCHITECTURE.md Item 3) until a " +
-        "dedicated streaming design exists.",
     };
   }
 
@@ -187,7 +174,7 @@ export function parseCliCorpus(rawText: string): readonly CliCapabilityEntry[] {
   const pageAtLine = buildPageIndex(rawLines);
 
   return headingLineNumbers.flatMap((rawLine) => {
-    const rawLineText = rawLines[rawLine - 1] ?? "";
+    const rawLineText = String(rawLines[rawLine - 1]);
     const decoded = decodeDoubledLetters(rawLineText.trim());
     const title = extractCommandTitle(decoded);
     const pdfPage = pageAtLine[rawLine - 1] ?? 0;

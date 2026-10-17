@@ -30,18 +30,15 @@ export function parseShowDns(text: string): ShowDnsResult {
     }
 
     const [, lan, kind, rawValue] = match;
-    const lanId = lan ?? "";
-    const value = rawValue === "[Not set]" ? null : (rawValue ?? null);
+    const lanId = lan as string;
+    const value = rawValue === "[Not set]" ? null : (rawValue as string);
 
     if (!byLan.has(lanId)) {
       byLan.set(lanId, { primaryDns: null, secondaryDns: null });
       order.push(lanId);
     }
 
-    const entry = byLan.get(lanId);
-    if (entry === undefined) {
-      continue;
-    }
+    const entry = byLan.get(lanId) as { primaryDns: string | null; secondaryDns: string | null };
 
     if (kind === "Primary") {
       byLan.set(lanId, { ...entry, primaryDns: value });
@@ -52,7 +49,7 @@ export function parseShowDns(text: string): ShowDnsResult {
 
   return {
     entries: order.map((lan) => {
-      const value = byLan.get(lan) ?? { primaryDns: null, secondaryDns: null };
+      const value = byLan.get(lan) as { primaryDns: string | null; secondaryDns: string | null };
       return { lan, ...value };
     }),
   };

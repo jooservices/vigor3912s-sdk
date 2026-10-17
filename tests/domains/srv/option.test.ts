@@ -25,6 +25,17 @@ describe("cli.srv.dhcp.option", () => {
         }),
       ).command,
     ).toBe("srv dhcp option -e 1 -i a -c 18 -v path");
+    expect(
+      firstFrame(
+        srvDhcpOption.buildFrames({
+          action: "setAscii",
+          enabled: false,
+          lan: "a",
+          optionNumber: 18,
+          value: "path",
+        }),
+      ).command,
+    ).toBe("srv dhcp option -e 0 -i a -c 18 -v path");
     expect(() =>
       srvDhcpOption.buildFrames({
         action: "setAscii",

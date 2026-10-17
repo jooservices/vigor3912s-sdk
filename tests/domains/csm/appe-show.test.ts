@@ -9,6 +9,7 @@ import { dispatchThroughFakeTransport, expectClosedTransportFailure } from "./te
 const SAMPLE_SHOW_TEXT = [
   "           Type     Index                    Name         Version",
   "----------------------------------------------------------------------------------",
+  "",
   "       Protocol        44                     BGP                4",
   "       Protocol        45                     DNS",
   "       Protocol        50            IBM Informix",
