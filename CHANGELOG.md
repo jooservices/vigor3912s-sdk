@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0] - 2026-09-29
 
+Historical release snapshot; the counts below describe version 2.0.0 on its release date.
+
 ### Added
 
 - `./schemas` export: JSON Schema (`inputSchemas`, `inputSchemaFor(manifestId)`,
@@ -119,6 +121,8 @@ l2lset/l2lDrop/dinset/option/trunk/sameSubnet`, `user set/edit/account`)
   CodeQL actions pinned to v4.38.1.
 
 ## [1.0.0] - 2026-09-14
+
+Historical release snapshot; the counts below describe version 1.0.0 on its release date, not current project totals.
 
 ### Added
 

@@ -1,6 +1,8 @@
 # IMPLEMENTATION — vigor3912s-sdk: typed input schemas + MCP gap closure
 
-Status: **In progress** (2026-09-29). Target release: **1.1.0** (minor, additive).
+> **Historical implementation plan and evidence (last updated 2026-09-29):** Status, manifest totals, test counts, and coverage figures in this file describe dated milestones and are retained for traceability. The current verification snapshot is maintained at the top of `BACKLOG.md`.
+
+Status at that historical snapshot: **In progress** (2026-09-29). Target release: **1.1.0** (minor, additive).
 Companion plan (consumer side): [`../vigor3912s-mcp/IMPLEMENTATION.md`](../vigor3912s-mcp/IMPLEMENTATION.md).
 Root summary: [`docs/01-projects/vigor3912s-sdk/IMPLEMENTATION.md`](../../docs/01-projects/vigor3912s-sdk/IMPLEMENTATION.md).
 

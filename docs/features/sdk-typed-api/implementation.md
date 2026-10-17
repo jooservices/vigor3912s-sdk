@@ -1,5 +1,7 @@
 # Implementation plan — Public Typed Operations API (ARCHITECTURE.md §6c)
 
+> **Historical implementation plan:** The 472-operation references below describe the 2026-09-14 planning snapshot. Current operation totals are maintained in `BACKLOG.md`.
+
 > **Superseded 2026-09-14:** Tasks that mandate `ChangePlan` / `denyAllVerifier` /
 > `createChangePlan` / `executeChangePlan` no longer match the code. Typed writes
 > use `invoke()`; policy is consumer-owned. See `ARCHITECTURE.md` Item 2 amendment.
