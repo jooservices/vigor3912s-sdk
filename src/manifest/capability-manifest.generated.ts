@@ -6136,8 +6136,10 @@ export const capabilityManifest = [
     },
     classification: "read",
     classificationBasis: "sibling-live-verified",
-    status: "implemented",
-    operationIds: ["cli.sys.pollbuf"],
+    status: "blocked-by-documentation",
+    blockedReason:
+      "The bare query was rejected as incomplete on DEV; the vendor guide documents only state-changing on/off forms, and no read-only query syntax is verified.",
+    operationIds: [],
     command: "sys pollbuf",
     commandPath: ["sys", "pollbuf"],
     firmwareBasis: "user-guide-v4.3.5.1",

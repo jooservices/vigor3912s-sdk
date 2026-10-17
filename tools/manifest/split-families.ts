@@ -1,4 +1,8 @@
-import type { Classification, ClassificationBasis } from "../../src/manifest/types.js";
+import type {
+  CapabilityStatus,
+  Classification,
+  ClassificationBasis,
+} from "../../src/manifest/types.js";
 
 /**
  * Per-heading command splits (`ARCHITECTURE.md` amendment 2026-09-13 +
@@ -33,6 +37,8 @@ export interface SplitSubCommand {
   readonly command: string;
   readonly classification: Classification;
   readonly classificationBasis: ClassificationBasis;
+  readonly status?: CapabilityStatus;
+  readonly blockedReason?: string;
   /**
    * Optional explicit id when `slugifyCommandPath` would collide (Part VIII
    * `log -f` vs `log -F` both slugify to `cli.log.f` because the helper
@@ -987,12 +993,18 @@ export const SPLIT_FAMILIES: ReadonlyMap<string, readonly SplitSubCommand[]> = n
   [
     "sys pollbuf",
     [
-      // live-verified bare query (unchanged).
+      // The sibling project's bare query was rejected as incomplete on DEV.
+      // The PDF documents only state-changing on/off forms, so retain the
+      // read classification but block implementation until safe syntax is
+      // verified on the target firmware.
       {
         commandPath: ["sys", "pollbuf"],
         command: "sys pollbuf",
         classification: "read",
         classificationBasis: "sibling-live-verified",
+        status: "blocked-by-documentation",
+        blockedReason:
+          "The bare query was rejected as incomplete on DEV; the vendor guide documents only state-changing on/off forms, and no read-only query syntax is verified.",
       },
       // rawLine 8121.
       {

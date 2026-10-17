@@ -18,7 +18,7 @@ consume it from the checkout or a Git tag. See [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Features
 
-- Typed CLI operations for every implementable DrayOS command (640 ops /
+- Typed CLI operations for every implementable DrayOS command (639 ops /
   42 domain modules); blocked entries carry documented reasons
 - Typed, validated **input** for every operation; read output is structured
   only where DrayOS documents a response shape. Otherwise it returns `{ raw }`

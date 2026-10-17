@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { liveReadOnlyAllowlist } from "../../src/live/allowlist.js";
 import { operationRegistry } from "../../src/internal/registry/registry.generated.js";
 import { byId } from "../../src/manifest/index.js";
+import { inputSchemaFor } from "../../src/schemas/index.js";
 
 /**
  * Safety cross-check, not a smoke test: per `ARCHITECTURE.md`'s Item 4, the
@@ -29,6 +30,14 @@ describe("liveReadOnlyAllowlist", () => {
   it.each(liveReadOnlyAllowlist)("id %s is an input-less operation", (id) => {
     expect(operationRegistry.get(id)?.buildFrames.length).toBe(0);
   });
+
+  it.each(["cli.show.traffic", "cli.show.clienttraffic"])(
+    "keeps parameterized %s reads out until LiveReadOnlyClient supports input",
+    (id) => {
+      expect(liveReadOnlyAllowlist).not.toContain(id);
+      expect(inputSchemaFor(id)).not.toBeNull();
+    },
+  );
 
   it("contains no duplicate ids", () => {
     const unique = new Set(liveReadOnlyAllowlist);

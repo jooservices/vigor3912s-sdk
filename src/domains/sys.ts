@@ -38,7 +38,6 @@ import { parseSysDashboard, type SysDashboard } from "../internal/parsers/sys/da
 import { parseSysDnsCacheTbl, type SysDnsCacheTbl } from "../internal/parsers/sys/dnscachetbl.js";
 import { parseSysFrLog, type SysFrLog } from "../internal/parsers/sys/frlog.js";
 import { parseSysMaxSession, type SysMaxSession } from "../internal/parsers/sys/maxsession.js";
-import { parseSysPollbuf, type SysPollbuf } from "../internal/parsers/sys/pollbuf.js";
 import { parseSysQryBuf, type SysQryBuf } from "../internal/parsers/sys/qrybuf.js";
 import { parseSysReboot } from "../internal/parsers/sys/reboot.js";
 import { parseSysSyslog } from "../internal/parsers/sys/syslog.js";
@@ -138,13 +137,6 @@ const sysQrybuf: TypedOperation<void, SysQryBuf> = {
 // operations frame only the live-observed no-argument query (`vigor3912s-mcp`
 // `src/commands/registry/families/sys.ts`, consulted read-only as evidence).
 // ---------------------------------------------------------------------------
-
-const sysPollbuf: TypedOperation<void, SysPollbuf> = {
-  manifestId: "cli.sys.pollbuf",
-  classification: "read",
-  buildFrames: () => [frameSingleCommand("sys pollbuf")],
-  parse: (exchanges) => parseSysPollbuf(firstExchangeText(exchanges)),
-};
 
 const sysFrlog: TypedOperation<void, SysFrLog> = {
   manifestId: "cli.sys.frlog",
@@ -1044,7 +1036,6 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
   sysCc,
   sysVersion,
   sysQrybuf,
-  sysPollbuf,
   sysPollbufOn,
   sysPollbufOff,
   sysFrlog,

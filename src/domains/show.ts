@@ -3,14 +3,9 @@
  * manifest entries. Per `internal/registry/self-assembly.ts`'s binding
  * export convention, this module's required export is `operations`.
  *
- * All commands are simple no-argument read commands
- * (`commandPath: ["show", <name>]`, `command: "show <name>"` with no
- * arguments in the manifest), so every operation shares the same
- * zero-argument `TInput = never` shape and issues exactly one
- * `frameSingleCommand(...)` frame. There is no caller-controlled input for
- * any of these operations, so there is no injection surface to defend
- * against beyond framing's own rejection rules (proven in this module's
- * tests).
+ * Fixed status-display commands have no input. Parameterized traffic reads
+ * carry the fields their documented syntax requires; their builders validate
+ * every field before creating a single frame.
  */
 
 import { InvalidInputError } from "../errors.js";
@@ -70,6 +65,19 @@ function defineOperation<TOutput>(options: {
   };
 }
 
+function defineInputOperation<TInput, TOutput>(options: {
+  readonly manifestId: string;
+  readonly buildCommand: (input: TInput) => string;
+  readonly parse: (stdout: string) => TOutput;
+}): TypedOperation<TInput, TOutput> {
+  return {
+    manifestId: options.manifestId,
+    classification: "read",
+    buildFrames: (input) => [frameSingleCommand(options.buildCommand(input))],
+    parse: (exchanges) => options.parse(firstStdout(exchanges)),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Sub-form completion (S8): parameterised `show traffic` / `show
 // clienttraffic` graphs and `show statistic reset` (rawLine 6905-6947).
@@ -117,6 +125,43 @@ export interface ShowTrafficSessionInput {
   readonly weekly?: boolean;
 }
 
+export type ShowTrafficInput =
+  | ({ readonly form: "wan" } & ShowTrafficWanInput)
+  | ({ readonly form: "ip" } & ShowTrafficIpInput)
+  | ({ readonly form: "session" } & ShowTrafficSessionInput);
+
+function buildShowTrafficCommand(input: ShowTrafficInput): string {
+  switch (input.form) {
+    case "wan": {
+      if (!/^wan[1-7]$/.test(input.wan)) {
+        throw new InvalidInputError(`wan must be "wan1".."wan7" (got "${input.wan}").`);
+      }
+      assertOneOf(input.direction, TRAFFIC_DIRECTIONS, "direction");
+      return `show traffic ${input.wan} ${input.direction}${input.weekly === true ? " weekly" : ""}`;
+    }
+    case "ip": {
+      assertIpv4(input.ipv4Address, "ipv4Address");
+      assertOneOf(input.direction, TRAFFIC_DIRECTIONS, "direction");
+      return `show traffic ${input.ipv4Address} ${input.direction}`;
+    }
+    case "session": {
+      return `show traffic session${input.weekly === true ? " weekly" : ""}`;
+    }
+    default: {
+      throw new InvalidInputError('form must be one of "wan", "ip", or "session".');
+    }
+  }
+}
+
+export const showTraffic = defineInputOperation<
+  ShowTrafficInput,
+  ReturnType<typeof parseShowTraffic>
+>({
+  manifestId: "cli.show.traffic",
+  buildCommand: buildShowTrafficCommand,
+  parse: parseShowTraffic,
+});
+
 export const showTrafficSession = defineRawOperation<ShowTrafficSessionInput>(
   "cli.show.traffic.session",
   "read",
@@ -146,17 +191,28 @@ export interface ShowClientTrafficDeviceInput {
   readonly weekly?: boolean;
 }
 
+function buildShowClientTrafficCommand(input: ShowClientTrafficDeviceInput): string {
+  assertIntegerInRange(input.deviceIndex, 1, 30, "deviceIndex");
+  assertOneOf(input.interfaceLabel, ["WAN1", "WAN2", "LANA", "LANB"], "interfaceLabel");
+  assertOneOf(input.direction, TRAFFIC_DIRECTIONS, "direction");
+  const index = String(input.deviceIndex).padStart(2, "0");
+
+  return `show clienttraffic ${index} ${input.interfaceLabel} ${input.direction}${input.weekly === true ? " weekly" : ""}`;
+}
+
+export const showClientTraffic = defineInputOperation<
+  ShowClientTrafficDeviceInput,
+  ReturnType<typeof parseShowClientTraffic>
+>({
+  manifestId: "cli.show.clienttraffic",
+  buildCommand: buildShowClientTrafficCommand,
+  parse: parseShowClientTraffic,
+});
+
 export const showClientTrafficDevice = defineRawOperation<ShowClientTrafficDeviceInput>(
   "cli.show.clienttraffic.device",
   "read",
-  (input) => {
-    assertIntegerInRange(input.deviceIndex, 1, 30, "deviceIndex");
-    assertOneOf(input.interfaceLabel, ["WAN1", "WAN2", "LANA", "LANB"], "interfaceLabel");
-    assertOneOf(input.direction, TRAFFIC_DIRECTIONS, "direction");
-    const index = String(input.deviceIndex).padStart(2, "0");
-
-    return `show clienttraffic ${index} ${input.interfaceLabel} ${input.direction}${input.weekly === true ? " weekly" : ""}`;
-  },
+  buildShowClientTrafficCommand,
 );
 
 export interface ShowStatisticResetInput {
@@ -247,16 +303,8 @@ export const operations: readonly TypedOperation<never, unknown>[] = [
     command: "show status",
     parse: parseShowStatus,
   }),
-  defineOperation({
-    manifestId: "cli.show.traffic",
-    command: "show traffic",
-    parse: parseShowTraffic,
-  }),
-  defineOperation({
-    manifestId: "cli.show.clienttraffic",
-    command: "show clienttraffic",
-    parse: parseShowClientTraffic,
-  }),
+  showTraffic,
+  showClientTraffic,
   defineOperation({
     manifestId: "cli.show.statistic",
     command: "show statistic",

@@ -1,45 +1,50 @@
 import { describe, expect, it } from "vitest";
 
+import { Vigor3912SClient } from "../../../src/client.js";
+import { operations, sysPollbufOff, sysPollbufOn } from "../../../src/domains/sys.js";
+import { frameSingleCommand } from "../../../src/internal/execution/framing.js";
 import type { TypedOperation } from "../../../src/internal/registry/operation.js";
-import type { SysPollbuf } from "../../../src/internal/parsers/sys/pollbuf.js";
-import {
-  assertManifestClassification,
-  dispatchThroughFakeTransport,
-  exchanges,
-  expectClosedTransportFailure,
-  frameCommand,
-  getSysOperation,
-} from "./test-helpers.js";
+import { operationRegistry } from "../../../src/internal/registry/registry.generated.js";
+import { byId } from "../../../src/manifest/index.js";
+import { FakeTransport } from "../../support/fake-transport.js";
 
 const MANIFEST_ID = "cli.sys.pollbuf";
-const operation = getSysOperation(MANIFEST_ID) as TypedOperation<void, SysPollbuf>;
 
-const SAMPLE = "% Buffer polling is on!";
+describe("sys pollbuf read capability", () => {
+  it("preserves the read classification while blocking an unverified query", () => {
+    const entry = byId(MANIFEST_ID);
 
-describe("sys pollbuf", () => {
-  it("builds the documented no-argument frame", () => {
-    const [frame] = operation.buildFrames();
-
-    expect(frameCommand(frame)).toBe("sys pollbuf");
+    expect(entry?.classification).toBe("read");
+    expect(entry?.classificationBasis).toBe("sibling-live-verified");
+    expect(entry?.status).toBe("blocked-by-documentation");
+    expect(entry?.blockedReason).toMatch(/rejected as incomplete on DEV/);
+    expect(operations.some((operation) => operation.manifestId === MANIFEST_ID)).toBe(false);
+    expect(operationRegistry.has(MANIFEST_ID)).toBe(false);
   });
 
-  it("trims the free-form acknowledgement text", () => {
-    const parsed = operation.parse(exchanges(`  ${SAMPLE}  `));
+  it("rejects a stale descriptor before it can reach even a fake transport", async () => {
+    const staleDescriptor: TypedOperation<void, { readonly raw: string }> = {
+      manifestId: MANIFEST_ID,
+      classification: "read",
+      buildFrames: () => [frameSingleCommand("sys pollbuf")],
+      parse: () => ({ raw: "" }),
+    };
+    const transport = new FakeTransport();
+    const client = Vigor3912SClient.fromTransport(transport);
 
-    expect(parsed).toEqual({ raw: SAMPLE });
+    await expect(client.invoke(staleDescriptor, undefined)).rejects.toMatchObject({
+      code: "forged_operation_rejected",
+    });
+    expect(transport.calls).toEqual([]);
   });
 
-  it("is linked in the manifest as classification read", () => {
-    assertManifestClassification(MANIFEST_ID, "read");
-  });
+  it("keeps the documented on/off forms classified as writes", () => {
+    expect(sysPollbufOn.classification).toBe("write");
+    expect(sysPollbufOn.buildFrames(undefined)[0]?.command).toBe("sys pollbuf on");
+    expect(byId("cli.sys.pollbuf.on")?.classification).toBe("write");
 
-  it("dispatches through the fake transport and fails when the session is closed", async () => {
-    const { stdout } = await dispatchThroughFakeTransport(
-      frameCommand(operation.buildFrames()[0]),
-      SAMPLE,
-    );
-
-    expect(stdout).toContain("Buffer polling");
-    await expectClosedTransportFailure("sys pollbuf");
+    expect(sysPollbufOff.classification).toBe("write");
+    expect(sysPollbufOff.buildFrames(undefined)[0]?.command).toBe("sys pollbuf off");
+    expect(byId("cli.sys.pollbuf.off")?.classification).toBe("write");
   });
 });

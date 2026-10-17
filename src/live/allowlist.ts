@@ -26,14 +26,13 @@
  * | show nat               | cli.show.nat             | read            |
  * | show portmap           | cli.show.portmap         | read            |
  * | show session           | cli.show.session         | read            |
- * | show traffic           | cli.show.traffic         | read            |
- * | show clienttraffic     | cli.show.clienttraffic   | read            |
  * | show statistic         | cli.show.statistic       | read            |
  * | linux status           | cli.linux.status         | read            |
  *
- * All 13 are `classification: "read"` under an exact `command` match. The
- * client's `invoke(id)` takes no input, so every id here must be input-less:
- * `sys health` was dropped because it requires a metric argument.
+ * The 11 listed ids are `classification: "read"` under an exact `command`
+ * match. The client's `invoke(id)` takes no input, so parameterized traffic
+ * reads stay out of this list until JOODT-33 adds safe input support. `sys
+ * health` also remains omitted because it requires a metric argument.
  *
  * Listing an id here is not authorization to connect to a live router;
  * that still needs separate, explicit owner approval.
@@ -49,8 +48,6 @@ export const liveReadOnlyAllowlist: readonly string[] = [
   "cli.show.nat",
   "cli.show.portmap",
   "cli.show.session",
-  "cli.show.traffic",
-  "cli.show.clienttraffic",
   "cli.show.statistic",
   "cli.linux.status",
 ];
