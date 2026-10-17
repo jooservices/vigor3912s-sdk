@@ -2,6 +2,8 @@
 
 Date: 2026-09-14
 
+> **Historical QA report:** All test, manifest, operation, and coverage figures below describe the closed gate on 2026-09-14. See `BACKLOG.md` for the current verification snapshot.
+
 Scope: final reporting for the completed public client-facing `Transport` seam
 in `projects/vigor3912s/sdk`. This report maps `REQ-SDK-1` through `REQ-SDK-6`
 to implementation, tests, review disposition, and QA evidence. It does not
