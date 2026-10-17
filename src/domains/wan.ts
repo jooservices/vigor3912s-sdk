@@ -956,7 +956,12 @@ export const wanLbMode = defineRawOperation<WanLbModeInput>("cli.wan.lb.mode", "
 export const wanLbStatus = defineCommandOperation("cli.wan.lb.status", "read", "wan lb status");
 
 // `wan vlan stat` (rawLine 11191): current WAN VLAN tagging.
-export const wanVlanStat = defineCommandOperation("cli.wan.vlan.stat", "read", "wan vlan stat");
+export const wanVlanStat: TypedOperation<void, RawCommandOutput> = {
+  ...defineCommandOperation("cli.wan.vlan.stat", "read", "wan vlan stat"),
+  // The DEV router did not complete this documented read within 60 seconds.
+  // Allow up to 120 seconds for this operation only; keep the global ceiling.
+  executionOverride: { commandTimeoutMs: 120_000 },
+};
 
 // `wan budget status` (rawLine 11223): WAN budget configuration.
 export const wanBudgetStatus = defineCommandOperation(

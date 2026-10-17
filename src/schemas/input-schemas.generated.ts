@@ -2620,7 +2620,18 @@ export const inputSchemas: Readonly<Record<string, JsonSchema | null>> = {
       },
     ],
   },
-  "cli.ip.dnsforward": null,
+  "cli.ip.dnsforward": {
+    type: "object",
+    properties: {
+      profileIndex: {
+        type: "integer",
+        minimum: 1,
+        description: "Profile setting index selected for the read-only `-l` list form.",
+      },
+    },
+    required: ["profileIndex"],
+    additionalProperties: false,
+  },
   "cli.ip.igmpfl": {
     type: "object",
     properties: {
@@ -2927,7 +2938,7 @@ export const inputSchemas: Readonly<Record<string, JsonSchema | null>> = {
       },
       wanInterface: {
         type: "string",
-        enum: ["WAN1", "WAN2", "AUTO"],
+        enum: ["AUTO", "WAN1", "WAN2"],
       },
       sourceIp: {
         type: "string",
@@ -7354,7 +7365,30 @@ export const inputSchemas: Readonly<Record<string, JsonSchema | null>> = {
     required: ["newOwner", "newOwnerEmail"],
     additionalProperties: false,
   },
-  "cli.show.clienttraffic": null,
+  "cli.show.clienttraffic": {
+    type: "object",
+    properties: {
+      deviceIndex: {
+        type: "integer",
+        minimum: 1,
+        maximum: 30,
+        description: "External device (VigorSwitch) index 1..30, sent as two digits.",
+      },
+      interfaceLabel: {
+        type: "string",
+        description: "`WAN1`, `WAN2`, `LANA` or `LANB`.",
+      },
+      direction: {
+        type: "string",
+        enum: ["tx", "rx"],
+      },
+      weekly: {
+        type: "boolean",
+      },
+    },
+    required: ["deviceIndex", "interfaceLabel", "direction"],
+    additionalProperties: false,
+  },
   "cli.show.clienttraffic.device": {
     type: "object",
     properties: {
@@ -7420,7 +7454,62 @@ export const inputSchemas: Readonly<Record<string, JsonSchema | null>> = {
     additionalProperties: false,
   },
   "cli.show.status": null,
-  "cli.show.traffic": null,
+  "cli.show.traffic": {
+    oneOf: [
+      {
+        type: "object",
+        properties: {
+          form: {
+            const: "wan",
+          },
+          wan: {
+            type: "string",
+            description: "`wan1`..`wan7`.",
+          },
+          direction: {
+            type: "string",
+            enum: ["tx", "rx"],
+          },
+          weekly: {
+            type: "boolean",
+            description: "Weekly graph instead of the default.",
+          },
+        },
+        required: ["form", "wan", "direction"],
+        additionalProperties: false,
+      },
+      {
+        type: "object",
+        properties: {
+          form: {
+            const: "ip",
+          },
+          ipv4Address: {
+            type: "string",
+          },
+          direction: {
+            type: "string",
+            enum: ["tx", "rx"],
+          },
+        },
+        required: ["form", "ipv4Address", "direction"],
+        additionalProperties: false,
+      },
+      {
+        type: "object",
+        properties: {
+          form: {
+            const: "session",
+          },
+          weekly: {
+            type: "boolean",
+          },
+        },
+        required: ["form"],
+        additionalProperties: false,
+      },
+    ],
+  },
   "cli.show.traffic.ip": {
     type: "object",
     properties: {
@@ -9931,7 +10020,6 @@ export const inputSchemas: Readonly<Record<string, JsonSchema | null>> = {
     required: ["oldPassword", "newPassword"],
     additionalProperties: false,
   },
-  "cli.sys.pollbuf": null,
   "cli.sys.pollbuf.off": null,
   "cli.sys.pollbuf.on": null,
   "cli.sys.pwenc": {

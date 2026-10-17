@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `cli.ip.dnsforward`, `cli.show.traffic` and `cli.show.clienttraffic` now take the arguments DrayOS requires (the bare forms were rejected as incomplete).
+- `cli.wan.vlan.stat` and `cli.hsportal.level` use a 120 s command timeout.
+- `cli.sys.pollbuf` removed: only the state-changing `on`/`off` forms are documented, so no safe read exists (`sys pollbuf on`/`off` stay write operations).
+
 ## [2.0.0] - 2026-09-29
 
 Historical release snapshot; the counts below describe version 2.0.0 on its release date.

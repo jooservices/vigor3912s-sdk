@@ -1,6 +1,6 @@
 /**
- * Parser for `ip dnsforward` (`cli.ip.dnsforward`, rawLine 1990) -- sibling-
- * live-verified bare/query form.
+ * Parser for `ip dnsforward -i <index> -l` (`cli.ip.dnsforward`, rawLine 1990),
+ * the documented read-only profile-list form.
  */
 
 import { parseRawText, type RawCommandOutput } from "./shared.js";

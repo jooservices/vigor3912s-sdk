@@ -219,11 +219,11 @@ export const SIBLING_LIVE_VERIFIED_CLASSIFICATION: Readonly<Record<string, "read
   // in this same manifest (e.g. many `sys`/`show` commands: bare invocation
   // displays current state, an argument changes it) -- the PDF documents only
   // the "how to configure" form and omits the inspection form as too obvious
-  // to state. Accepted as `sibling-live-verified` read evidence. All 6 are
-  // now implemented as `TypedOperation`s in `src/domains/sys.ts` (Wave 4
-  // completion push, 2026-09-13); only `cli.sys.admin` remains genuinely
-  // deferred (see `src/domains/sys.ts`'s `deferredUnknownSysIds`).
-  "cli.sys.pollbuf": "read", // vigor3912s-mcp: sys_pollbuf, live-verified fw 4.4.7_RC2 (bare-invocation query; PDF only documents on|off set form)
+  // to state. Accepted as `sibling-live-verified` read evidence. The bare
+  // `cli.sys.pollbuf` query was later rejected as incomplete on DEV, so its
+  // read classification is retained while its implementation is blocked in
+  // `SPLIT_FAMILIES`; the remaining five are implemented in `sys.ts`.
+  "cli.sys.pollbuf": "read", // sibling live read classification; see the DEV-specific block in `split-families.ts`
   "cli.sys.frlog": "read", // vigor3912s-mcp: sys_fr_log, live-verified fw 4.4.7_RC2
   "cli.sys.dnscachetbl": "read", // vigor3912s-mcp: sys_dnsCacheTbl, live-verified fw 4.4.7_RC2
   "cli.sys.time": "read", // vigor3912s-mcp: sys_time, live-verified fw 4.4.7_RC2 (bare-invocation query; PDF only documents a set-time form)

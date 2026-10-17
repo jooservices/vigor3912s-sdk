@@ -1758,17 +1758,25 @@ export const ipLanDnsRes: TypedOperation<void, RawCommandOutput> = {
 };
 
 // ---------------------------------------------------------------------------
-// cli.ip.dnsforward -- `ip dnsforward` bare/query (rawLine 1990) -- read.
-//
-// Sibling-live-verified (`vigor3912s-mcp` `ip_dnsforward` frames the bare
-// command). The vendor PDF also documents SET flags and `-l`; this operation
-// models only the live-observed bare query.
+// cli.ip.dnsforward -- `ip dnsforward -i <index> -l` (rawLine 1990) -- read.
+// The bare command is rejected as incomplete. The documented `-l` form lists
+// one selected profile; configuration flags are intentionally not modeled.
 // ---------------------------------------------------------------------------
 
-export const ipDnsForward: TypedOperation<void, RawCommandOutput> = {
+export interface IpDnsForwardInput {
+  /** Profile setting index selected for the read-only `-l` list form. */
+  readonly profileIndex: number;
+}
+
+function buildDnsForwardFrames(input: IpDnsForwardInput): readonly CommandFrame[] {
+  assertPositiveInteger(input.profileIndex, "profileIndex");
+  return [frameSingleCommand(`ip dnsforward -i ${String(input.profileIndex)} -l`)];
+}
+
+export const ipDnsForward: TypedOperation<IpDnsForwardInput, RawCommandOutput> = {
   manifestId: "cli.ip.dnsforward",
   classification: "read",
-  buildFrames: () => [frameSingleCommand("ip dnsforward")],
+  buildFrames: buildDnsForwardFrames,
   parse: (exchanges) => parseDnsForward(firstExchangeText(exchanges)),
 };
 

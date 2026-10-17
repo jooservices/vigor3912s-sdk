@@ -166,6 +166,9 @@ export const hsportalLevel: TypedOperation<void, RawCommandOutput> = {
   classification: "read",
   buildFrames: buildLevelFrames,
   parse: (exchanges) => parseLevel(firstExchangeText(exchanges)),
+  // The DEV router did not complete this sibling-verified query within 60s.
+  // Keep the longer ceiling local to this operation; no global timeout rises.
+  executionOverride: { commandTimeoutMs: 120_000 },
 };
 
 // ---------------------------------------------------------------------------
