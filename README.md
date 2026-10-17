@@ -22,8 +22,8 @@ consume it from the checkout or a Git tag. See [`CHANGELOG.md`](./CHANGELOG.md).
   42 domain modules); blocked entries carry documented reasons
 - Typed, validated **input** for every operation; read output is structured
   only where DrayOS documents a response shape. Otherwise it returns `{ raw }`
-  (trimmed text), and a structured field the output lacks is `null`, never a
-  guessed value
+  (trimmed text). A structured field the output lacks may be `null` or
+  `undefined`, never a guessed value
 - `Vigor3912SClient.execute()` / `.invoke()` over an injected runner or
   `fromTransport(transport)`
 - Public subpaths: `./operations`, `./schemas`, `./transport`, `./live`
