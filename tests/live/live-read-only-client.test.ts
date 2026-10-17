@@ -8,7 +8,9 @@ import {
   type ExecutionLimits,
 } from "../../src/internal/execution/limits.js";
 import type { TypedOperation } from "../../src/internal/registry/operation.js";
+import { operationRegistry } from "../../src/internal/registry/registry.generated.js";
 import type { TransportExchange } from "../../src/internal/execution/transport.js";
+import { capabilityManifest } from "../../src/manifest/index.js";
 import {
   LiveClientRejectedError,
   LiveReadOnlyClient,
@@ -151,6 +153,24 @@ describe("LiveReadOnlyClient.create -- guard chain", () => {
     expect(readKeys).toEqual(["VIGOR_E2E_READ_ONLY"]);
   });
 
+  it("guard 1: falls back to the process environment when none is injected", () => {
+    const spy = createSpyTransport();
+    const options = { ...buildValidOptions(spy) };
+    Reflect.deleteProperty(options, "env");
+    const original = process.env.VIGOR_E2E_READ_ONLY;
+    process.env.VIGOR_E2E_READ_ONLY = "true";
+
+    try {
+      expect(LiveReadOnlyClient.create(options).listOperationIds()).toEqual([READ_ID]);
+    } finally {
+      if (original === undefined) {
+        delete process.env.VIGOR_E2E_READ_ONLY;
+      } else {
+        process.env.VIGOR_E2E_READ_ONLY = original;
+      }
+    }
+  });
+
   it("guard 2: rejects an id that is not in liveReadOnlyAllowlist, without touching the transport", () => {
     const spy = createSpyTransport();
     const options = buildValidOptions(spy, {
@@ -160,6 +180,89 @@ describe("LiveReadOnlyClient.create -- guard chain", () => {
     expect(() => LiveReadOnlyClient.create(options)).toThrow(/liveReadOnlyAllowlist/);
     expect(spy.send).not.toHaveBeenCalled();
     expect(spy.isOpenSpy).not.toHaveBeenCalled();
+  });
+
+  it("guard 2: fails closed when an allowlisted id has no manifest entry", () => {
+    const spy = createSpyTransport();
+    const manifest = capabilityManifest as unknown as { id: string }[];
+    const index = manifest.findIndex((entry) => entry.id === READ_ID);
+    const [entry] = manifest.splice(index, 1);
+
+    try {
+      expect(() => LiveReadOnlyClient.create(buildValidOptions(spy))).toThrow(
+        /manifest classification "read"/,
+      );
+    } finally {
+      manifest.splice(index, 0, entry as { id: string });
+    }
+    expect(spy.send).not.toHaveBeenCalled();
+  });
+
+  it("guard 2: rejects a manifest entry with a non-read classification", () => {
+    const spy = createSpyTransport();
+    const entry = capabilityManifest.find(
+      (candidate) => candidate.id === READ_ID,
+    ) as (typeof capabilityManifest)[number];
+    const mutable = entry as { classification: string };
+    const original = mutable.classification;
+    mutable.classification = "write";
+
+    try {
+      expect(() => LiveReadOnlyClient.create(buildValidOptions(spy))).toThrow(
+        /manifest classification "read"/,
+      );
+    } finally {
+      mutable.classification = original;
+    }
+  });
+
+  it("guard 2: rejects an allowlisted read with a manifest status other than implemented", () => {
+    const spy = createSpyTransport();
+    const entry = capabilityManifest.find(
+      (candidate) => candidate.id === READ_ID,
+    ) as (typeof capabilityManifest)[number];
+    const mutable = entry as { status: string };
+    const original = mutable.status;
+    mutable.status = "planned";
+
+    try {
+      expect(() => LiveReadOnlyClient.create(buildValidOptions(spy))).toThrow(
+        /manifest status "implemented"/,
+      );
+    } finally {
+      mutable.status = original;
+    }
+  });
+
+  it("guard 2: fails closed when the registry entry is absent", () => {
+    const spy = createSpyTransport();
+    const registry = operationRegistry as Map<string, TypedOperation<never, unknown>>;
+    const operation = registry.get(READ_ID) as TypedOperation<never, unknown>;
+    registry.delete(READ_ID);
+
+    try {
+      expect(() => LiveReadOnlyClient.create(buildValidOptions(spy))).toThrow(
+        /no read-classified registry entry/,
+      );
+    } finally {
+      registry.set(READ_ID, operation);
+    }
+  });
+
+  it("guard 2: rejects a write-classified registry entry behind a read manifest", () => {
+    const spy = createSpyTransport();
+    const operation = operationRegistry.get(READ_ID) as TypedOperation<never, unknown>;
+    const mutable = operation as { classification: string };
+    const original = mutable.classification;
+    mutable.classification = "write";
+
+    try {
+      expect(() => LiveReadOnlyClient.create(buildValidOptions(spy))).toThrow(
+        /no read-classified registry entry/,
+      );
+    } finally {
+      mutable.classification = original;
+    }
   });
 
   it("guard 3: rejects a transport policy with a non-private-lan host kind, without touching the transport", () => {

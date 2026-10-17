@@ -398,9 +398,9 @@ const sysTr069: TypedOperation<SysTr069Input, SysAck> = {
   buildFrames: (input) => {
     assertArgsShape(input.args, "sys tr069");
     const [subcommand] = input.args;
-    if (!(SYS_TR069_SUBCOMMANDS as readonly string[]).includes(subcommand ?? "")) {
+    if (!(SYS_TR069_SUBCOMMANDS as readonly string[]).includes(subcommand)) {
       throw new InvalidInputError(
-        `sys tr069 subcommand must be one of ${SYS_TR069_SUBCOMMANDS.join(", ")} (got "${subcommand ?? ""}").`,
+        `sys tr069 subcommand must be one of ${SYS_TR069_SUBCOMMANDS.join(", ")} (got "${subcommand}").`,
       );
     }
     return [frameSingleCommand(`sys tr069 ${input.args.join(" ")}`)];
@@ -446,9 +446,9 @@ const sysLicense: TypedOperation<SysLicenseInput, SysAck> = {
   buildFrames: (input) => {
     assertArgsShape(input.args, "sys license");
     const [subcommand] = input.args;
-    if (!(SYS_LICENSE_SUBCOMMANDS as readonly string[]).includes(subcommand ?? "")) {
+    if (!(SYS_LICENSE_SUBCOMMANDS as readonly string[]).includes(subcommand)) {
       throw new InvalidInputError(
-        `sys license subcommand must be one of ${SYS_LICENSE_SUBCOMMANDS.join(", ")} (got "${subcommand ?? ""}").`,
+        `sys license subcommand must be one of ${SYS_LICENSE_SUBCOMMANDS.join(", ")} (got "${subcommand}").`,
       );
     }
     return [frameSingleCommand(`sys license ${input.args.join(" ")}`)];
@@ -472,7 +472,7 @@ const sysSyslog: TypedOperation<SysSyslogInput, SysAck> = {
     const [flag, value] = input.args;
     if (flag !== "-a") {
       throw new InvalidInputError(
-        `sys syslog requires "-a <0/1>" as its first two arguments (got "${flag ?? ""}").`,
+        `sys syslog requires "-a <0/1>" as its first two arguments (got "${flag}").`,
       );
     }
     if (value !== "0" && value !== "1") {
@@ -500,13 +500,14 @@ const sysMailalert: TypedOperation<SysMailalertInput, SysAck> = {
     for (const [index, token] of input.args.entries()) {
       assertNonEmptyToken(token, `sys mailalert argument #${String(index + 1)}`);
     }
-    if (input.args.length > 0 && !SYS_MAILALERT_FLAG_PATTERN.test(input.args[0] ?? "")) {
+    const [firstArg] = input.args;
+    if (firstArg !== undefined && !SYS_MAILALERT_FLAG_PATTERN.test(firstArg)) {
       throw new InvalidInputError(
         `sys mailalert's first argument must be a single-letter flag (e.g. "-e").`,
       );
     }
     const command =
-      input.args.length > 0 ? `sys mailalert ${input.args.join(" ")}` : "sys mailalert";
+      firstArg !== undefined ? `sys mailalert ${input.args.join(" ")}` : "sys mailalert";
     return [frameSingleCommand(command)];
   },
   parse: (exchanges) => parseSysMailalert(firstExchangeText(exchanges)),
@@ -528,9 +529,9 @@ const sysWebhook: TypedOperation<SysWebhookInput, SysAck> = {
   buildFrames: (input) => {
     assertArgsShape(input.args, "sys webhook");
     const [subcommand] = input.args;
-    if (!(SYS_WEBHOOK_SUBCOMMANDS as readonly string[]).includes(subcommand ?? "")) {
+    if (!(SYS_WEBHOOK_SUBCOMMANDS as readonly string[]).includes(subcommand)) {
       throw new InvalidInputError(
-        `sys webhook subcommand must be one of ${SYS_WEBHOOK_SUBCOMMANDS.join(", ")} (got "${subcommand ?? ""}").`,
+        `sys webhook subcommand must be one of ${SYS_WEBHOOK_SUBCOMMANDS.join(", ")} (got "${subcommand}").`,
       );
     }
     return [frameSingleCommand(`sys webhook ${input.args.join(" ")}`)];

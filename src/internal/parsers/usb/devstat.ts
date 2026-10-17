@@ -26,7 +26,7 @@ export function parseDevstat(text: string): UsbDeviceStatusReport {
     .split(/\r?\n/)
     .map((line) => PORT_LINE_PATTERN.exec(line))
     .filter((match): match is RegExpExecArray => match !== null)
-    .map((match) => ({ port: Number(match[1]), status: (match[2] ?? "").trim() }));
+    .map((match) => ({ port: Number(match[1]), status: (match[2] as string).trim() }));
 
   return { ports };
 }

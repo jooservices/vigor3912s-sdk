@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { local8021xShow } from "../../../src/domains/local_8021x.js";
+import { local8021xEnable, local8021xShow } from "../../../src/domains/local_8021x.js";
 import { parseShow } from "../../../src/internal/parsers/local_8021x/show.js";
 import {
   dispatchThroughFakeTransport,
@@ -12,6 +12,15 @@ import {
 const SAMPLE_TEXT = "% Local 802.1X enable: disable\n";
 
 describe("cli.local8021x -- local_8021x show (read)", () => {
+  it("builds both enable states", () => {
+    expect(firstFrame(local8021xEnable.buildFrames({ enabled: true })).command).toBe(
+      "local_8021x enable 1",
+    );
+    expect(firstFrame(local8021xEnable.buildFrames({ enabled: false })).command).toBe(
+      "local_8021x enable 0",
+    );
+  });
+
   it("builds the documented no-argument frame", () => {
     const frames = local8021xShow.buildFrames(undefined);
 

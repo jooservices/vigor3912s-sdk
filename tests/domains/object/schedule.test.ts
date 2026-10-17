@@ -16,6 +16,9 @@ describe("cli.object.schedule", () => {
     const frame = firstFrame(objectSchedule.buildFrames({ index: 1, enabled: true }));
 
     expect(frame.command).toBe("object schedule set 1 -e 1");
+    expect(firstFrame(objectSchedule.buildFrames({ index: 1, enabled: false })).command).toBe(
+      "object schedule set 1 -e 0",
+    );
     expect(() => objectSchedule.buildFrames({ index: 16, enabled: true })).toThrow(/index/);
   });
 

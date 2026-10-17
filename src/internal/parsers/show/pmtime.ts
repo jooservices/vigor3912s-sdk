@@ -32,10 +32,10 @@ export function parseShowPmtime(text: string): ShowPmtimeResult {
 
     const [, level, tcp, udp, icmp] = match;
 
-    levels[`level${level ?? ""}`] = {
-      tcp: Number(tcp ?? 0),
-      udp: Number(udp ?? 0),
-      icmp: Number(icmp ?? 0),
+    levels[`level${level as string}`] = {
+      tcp: Number(tcp),
+      udp: Number(udp),
+      icmp: Number(icmp),
     };
   }
 

@@ -28,6 +28,9 @@ describe("cli.ip.bandwidth -- ip bandwidth", () => {
     expect(firstFrame(ipBandwidth.buildFrames({ action: "routing", enabled: false })).command).toBe(
       "ip bandwidth routing off",
     );
+    expect(firstFrame(ipBandwidth.buildFrames({ action: "routing", enabled: true })).command).toBe(
+      "ip bandwidth routing on",
+    );
     expect(
       firstFrame(ipBandwidth.buildFrames({ action: "schedule", profiles: [1, 2, 3, 4] })).command,
     ).toBe("ip bandwidth schedule 1 2 3 4");
@@ -43,6 +46,18 @@ describe("cli.ip.bandwidth -- ip bandwidth", () => {
         }),
       ).command,
     ).toBe("ip bandwidth add 192.168.1.50-192.168.1.100 10 60 1");
+    expect(
+      firstFrame(
+        ipBandwidth.buildFrames({
+          action: "addRange",
+          ipStart: "192.168.1.50",
+          ipEnd: "192.168.1.100",
+          txRateKbps: 10,
+          rxRateKbps: 60,
+          shared: false,
+        }),
+      ).command,
+    ).toBe("ip bandwidth add 192.168.1.50-192.168.1.100 10 60 0");
     expect(
       firstFrame(
         ipBandwidth.buildFrames({

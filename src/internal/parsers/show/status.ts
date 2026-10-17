@@ -20,7 +20,7 @@ export interface ShowStatusLan {
 export interface ShowStatusWan {
   readonly index: number;
   readonly connectionStatus: string;
-  readonly enabled: boolean | null;
+  readonly enabled: boolean;
   readonly line: string | null;
   readonly name: string | null;
   readonly mode: string | null;
@@ -38,8 +38,8 @@ export interface ShowStatusResult {
 const WAN_BLOCK_PATTERN =
   /WAN\s+(\d+)\s+Status:\s*(\S+)[\s\S]*?Enable:(\S+)\s+Line:(\S+)\s+Name:\s*(\S*)[\s\S]*?Mode:(.+?)\s+Up Time:(\S+)\s+IP:(\S+)\s+GW IP:(\S+)/g;
 
-function dashToNull(value: string | undefined): string | null {
-  if (value === undefined || value === "---" || value === "") {
+function dashToNull(value: string): string | null {
+  if (value === "---" || value === "") {
     return null;
   }
   return value;
@@ -60,15 +60,15 @@ export function parseShowStatus(text: string): ShowStatusResult {
     const [, index, connectionStatus, enableFlag, line, name, mode, upTime, ip, gwIp] = match;
 
     wans.push({
-      index: Number(index ?? 0),
-      connectionStatus: connectionStatus ?? "",
-      enabled: enableFlag === undefined ? null : enableFlag === "Yes",
-      line: dashToNull(line),
-      name: dashToNull(name),
-      mode: dashToNull(mode),
-      upTime: dashToNull(upTime),
-      ip: dashToNull(ip),
-      gatewayIp: dashToNull(gwIp),
+      index: Number(index),
+      connectionStatus: connectionStatus as string,
+      enabled: enableFlag === "Yes",
+      line: dashToNull(line as string),
+      name: dashToNull(name as string),
+      mode: dashToNull(mode as string),
+      upTime: dashToNull(upTime as string),
+      ip: dashToNull(ip as string),
+      gatewayIp: dashToNull(gwIp as string),
     });
   }
 

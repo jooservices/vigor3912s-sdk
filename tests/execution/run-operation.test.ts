@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { CommandRunner } from "../../src/internal/command-runner.js";
+import { InvalidInputError } from "../../src/errors.js";
 import { frameSingleCommand } from "../../src/internal/execution/framing.js";
 import { runOperation } from "../../src/internal/execution/run-operation.js";
 import type { TypedOperation } from "../../src/internal/registry/operation.js";
@@ -37,6 +38,14 @@ describe("runOperation", () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it("passes percent-prefixed data output through to the parser", async () => {
+    const output = "% Current Session Usage : 3%";
+    const run = vi.fn(() => result(output));
+
+    await expect(runOperation({ run }, operation, undefined)).resolves.toBe(output);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses a rejected command without echoing router output", async () => {
     const run = vi.fn(() => result("% Invalid IP secret-host"));
 
@@ -57,5 +66,34 @@ describe("runOperation", () => {
       code: "invalid_input",
     });
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it("passes SDK validation errors through without wrapping them", async () => {
+    const error = new InvalidInputError("specific input validation");
+    const throwsSdkError = {
+      ...operation,
+      buildFrames: () => {
+        throw error;
+      },
+    };
+
+    await expect(runOperation({ run: vi.fn() }, throwsSdkError, undefined)).rejects.toBe(error);
+  });
+
+  it("wraps unexpected builder errors as malformed input and retains the cause", async () => {
+    const cause = new Error("builder failure");
+    const throwsUnexpected = {
+      ...operation,
+      buildFrames: () => {
+        throw cause;
+      },
+    };
+
+    await expect(runOperation({ run: vi.fn() }, throwsUnexpected, undefined)).rejects.toMatchObject(
+      {
+        code: "invalid_input",
+        cause,
+      },
+    );
   });
 });

@@ -19,6 +19,7 @@
  * `internal/parsers/port/*.ts`.
  */
 
+import { InvalidInputError } from "../errors.js";
 import { frameSingleCommand, type CommandFrame } from "../internal/execution/framing.js";
 import type { TypedOperation } from "../internal/registry/operation.js";
 import { parseStatus } from "../internal/parsers/port/status.js";
@@ -97,7 +98,7 @@ function buildSniffFrames(input: PortSniffInput): readonly CommandFrame[] {
       return [frameSingleCommand(`port sniff txrx ${String(input.rate)} ${input.lanPort}`)];
     default: {
       const _exhaustive: never = input;
-      return _exhaustive;
+      throw new InvalidInputError(`Unsupported port sniff action: ${String(_exhaustive)}.`);
     }
   }
 }

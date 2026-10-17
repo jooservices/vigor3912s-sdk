@@ -30,7 +30,6 @@ import type { RawCommandOutput } from "../internal/parsers/object/shared.js";
 import {
   assertCliValue,
   assertIntegerInRange,
-  assertIpv4,
   assertMaxLength,
   assertOneOf,
   assertPositiveInteger,
@@ -261,7 +260,6 @@ type ArgSpec =
   | { readonly kind: "int"; readonly min: number; readonly max: number }
   | { readonly kind: "name" }
   | { readonly kind: "token"; readonly maxLength?: number }
-  | { readonly kind: "ipv4" }
   | { readonly kind: "enum"; readonly values: readonly string[] };
 
 interface FlagSpec {
@@ -298,9 +296,6 @@ function assertArg(spec: ArgSpec, value: string | number, name: string): string 
       if (spec.maxLength !== undefined) {
         assertMaxLength(text, spec.maxLength, name);
       }
-      break;
-    case "ipv4":
-      assertIpv4(text, name);
       break;
     case "enum":
       assertOneOf(text, spec.values, name);

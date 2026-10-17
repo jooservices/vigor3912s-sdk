@@ -36,6 +36,39 @@ describe("extractSyntaxForms", () => {
       { heading: "ip arp", rawLine: 13, form: "ip arp flush" },
     ]);
   });
+
+  it("joins wrapped values with the documented punctuation and spacing rules", () => {
+    const raw = [
+      doubled("Telnet Command: wan route"),
+      "SSyynnttaaxx",
+      "wan route <address>/",
+      "24",
+      doubled("Telnet Command: wan route"),
+      "SSyynnttaaxx",
+      "wan route <open",
+      ">",
+      doubled("Telnet Command: wan route"),
+      "SSyynnttaaxx",
+      "wan route [bracketed",
+      "]",
+      doubled("Telnet Command: wan route"),
+      "SSyynnttaaxx",
+      "wan route <1/8",
+      "3/84>",
+      doubled("Telnet Command: wan route"),
+      "SSyynnttaaxx",
+      "wan route",
+      "<next>",
+    ].join("\n");
+
+    expect(extractSyntaxForms(raw).map(({ form }) => form)).toEqual([
+      "wan route <address>/24",
+      "wan route <open>",
+      "wan route [bracketed]",
+      "wan route <1/83/84>",
+      "wan route <next>",
+    ]);
+  });
 });
 
 describe("formMatchesCommand", () => {
@@ -68,5 +101,41 @@ describe("formMatchesCommand", () => {
       { kind: "value" },
       { kind: "rest" },
     ]);
+  });
+
+  it("ignores repeated whitespace and keeps malformed angle groups as one value", () => {
+    expect(tokenizeForm("  sys   status  ")).toEqual([
+      { kind: "literal", text: "sys" },
+      { kind: "literal", text: "status" },
+    ]);
+    expect(tokenizeForm("show <<")).toEqual([{ kind: "literal", text: "show" }, { kind: "rest" }]);
+  });
+
+  it("recognizes compound values, placeholder words, and dashed choices", () => {
+    expect(tokenizeForm("ip route <address>/<mask>")).toEqual([
+      { kind: "literal", text: "ip" },
+      { kind: "literal", text: "route" },
+      { kind: "value" },
+    ]);
+    expect(tokenizeForm("set -s Service Provider")).toEqual([
+      { kind: "literal", text: "set" },
+      { kind: "literal", text: "-s" },
+      { kind: "value" },
+    ]);
+    expect(tokenizeForm("set -h/l")).toEqual([
+      { kind: "literal", text: "set" },
+      { kind: "choice", options: ["-h", "-l"] },
+    ]);
+    expect(tokenizeForm("wan set <value>Mb")).toEqual([
+      { kind: "literal", text: "wan" },
+      { kind: "literal", text: "set" },
+      { kind: "value" },
+    ]);
+  });
+
+  it("matches alternatives and lets a trailing placeholder consume multiple words", () => {
+    expect(formMatchesCommand("ip set enable/disable", "ip set disable")).toBe(true);
+    expect(formMatchesCommand("ip set enable/disable", "ip set restart")).toBe(false);
+    expect(formMatchesCommand("ip set port", "ip set 80 tcp")).toBe(true);
   });
 });

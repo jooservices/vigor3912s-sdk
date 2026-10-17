@@ -23,6 +23,9 @@ describe("cli.ldap.set -- ldap set <Options><Value>", () => {
     expect(firstFrame(ldapSet.buildFrames({ option: "ssl", enabled: true })).command).toBe(
       "ldap set ssl 1",
     );
+    expect(firstFrame(ldapSet.buildFrames({ option: "ssl", enabled: false })).command).toBe(
+      "ldap set ssl 0",
+    );
     expect(
       firstFrame(ldapSet.buildFrames({ option: "ip", ipAddress: "192.168.100.155" })).command,
     ).toBe("ldap set IP 192.168.100.155");

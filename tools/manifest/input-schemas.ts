@@ -74,6 +74,18 @@ export class InputSchemaGenerationError extends Error {
   }
 }
 
+/** Converts the one expected per-operation type failure to an aggregate issue and preserves unexpected tool errors. */
+export function unsupportedInputIssueFromError(
+  manifestId: string,
+  error: unknown,
+): UnsupportedInputTypeIssue {
+  if (error instanceof UnsupportedInputTypeError) {
+    return { manifestId, reason: error.message };
+  }
+
+  throw error;
+}
+
 /**
  * Builds a full type-checked `ts.Program` from the project's real
  * `tsconfig.json` (so module resolution, `strict`, and
@@ -232,7 +244,6 @@ function typeSymbolName(type: ts.Type): string | undefined {
 
 /** Numeric constraints proven by a domain validator call on one input property. */
 interface NumericConstraint {
-  readonly integer: boolean;
   readonly minimum?: number;
   readonly maximum?: number;
   /**
@@ -251,11 +262,10 @@ interface NumericConstraint {
 const CONSTRAINT_HELPERS: Readonly<
   Record<string, (args: readonly (number | undefined)[]) => NumericConstraint>
 > = {
-  assertInteger: () => ({ integer: true }),
-  assertPositiveInteger: () => ({ integer: true, minimum: 1 }),
-  assertNonNegativeInteger: () => ({ integer: true, minimum: 0 }),
+  assertInteger: () => ({}),
+  assertPositiveInteger: () => ({ minimum: 1 }),
+  assertNonNegativeInteger: () => ({ minimum: 0 }),
   assertIntegerInRange: ([minimum, maximum]) => ({
-    integer: true,
     ...(minimum !== undefined ? { minimum } : {}),
     ...(maximum !== undefined ? { maximum } : {}),
   }),
@@ -273,7 +283,6 @@ function mergeConstraints(a: NumericConstraint, b: NumericConstraint): NumericCo
   // A property validated with different ranges by different call sites has
   // no single range: keep only what every site agrees on.
   return {
-    integer: a.integer && b.integer,
     ...(sameRange && a.minimum !== undefined ? { minimum: a.minimum } : {}),
     ...(sameRange && a.maximum !== undefined ? { maximum: a.maximum } : {}),
     ...(a.sentinel !== undefined && a.sentinel === b.sentinel ? { sentinel: a.sentinel } : {}),
@@ -366,7 +375,7 @@ function applyNumericConstraint(
 
   const ranged: JsonSchema = {
     ...schema,
-    ...(constraint.integer ? { type: "integer" as const } : {}),
+    type: "integer",
     ...(constraint.minimum !== undefined ? { minimum: constraint.minimum } : {}),
     ...(constraint.maximum !== undefined ? { maximum: constraint.maximum } : {}),
   };
@@ -400,15 +409,7 @@ function resolveInputType(
     );
   }
 
-  const [inputType] = checker.getTypeArguments(elementType as ts.TypeReference);
-
-  if (inputType === undefined) {
-    throw new UnsupportedInputTypeError(
-      `manifestId "${manifestId}": could not resolve the TInput type argument of "${checker.typeToString(elementType)}".`,
-    );
-  }
-
-  return inputType;
+  return checker.getTypeArguments(elementType as ts.TypeReference)[0] as ts.Type;
 }
 
 function isPlainObjectType(checker: ts.TypeChecker, type: ts.Type): boolean {
@@ -610,14 +611,7 @@ function typeToSchema(context: ConversionContext, type: ts.Type): JsonSchema {
   }
 
   if (checker.isArrayType(type)) {
-    const [elementType] = checker.getTypeArguments(type as ts.TypeReference);
-
-    if (elementType === undefined) {
-      throw new UnsupportedInputTypeError(
-        `manifestId "${manifestId}": could not resolve array element type for "${checker.typeToString(type)}".`,
-      );
-    }
-
+    const elementType = checker.getTypeArguments(type as ts.TypeReference)[0] as ts.Type;
     return { type: "array", items: typeToSchema(context, elementType) };
   }
 
@@ -728,14 +722,7 @@ export function buildInputSchemas(
     const localConsts = localConstInitializers(sourceFile);
 
     elements.forEach((element, indexInFile) => {
-      const runtimeOperation = fileOperations[indexInFile];
-
-      if (runtimeOperation === undefined) {
-        // Unreachable given the length check above; guards `noUncheckedIndexedAccess`.
-        throw new Error(
-          `Domain module "${fileName}": internal error resolving operations[${String(indexInFile)}].`,
-        );
-      }
+      const runtimeOperation = fileOperations[indexInFile] as TypedOperation<never, unknown>;
 
       const manifestId = runtimeOperation.manifestId;
       const staticManifestId = tryReadStaticManifestId(element, localConsts);
@@ -756,11 +743,7 @@ export function buildInputSchemas(
           inputType,
         );
       } catch (error) {
-        if (error instanceof UnsupportedInputTypeError) {
-          issues.push({ manifestId, reason: error.message });
-        } else {
-          throw error;
-        }
+        issues.push(unsupportedInputIssueFromError(manifestId, error));
       }
     });
   }
@@ -783,7 +766,7 @@ export function buildInputSchemas(
 }
 
 /** Locale-independent ordering: generated output must not depend on the host's ICU locale. */
-function compareCodePoints(left: string, right: string): number {
+export function compareCodePoints(left: string, right: string): number {
   if (left < right) {
     return -1;
   }

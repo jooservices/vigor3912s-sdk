@@ -28,6 +28,9 @@ describe("cli.port.sniff -- port sniff <on|off|port|txrx|restart> (write)", () =
     expect(() => portSniff.buildFrames({ action: "port", lanPort: "p9" as never })).toThrow(
       /lanPort/,
     );
+    expect(() => portSniff.buildFrames({ action: "invalid" } as never)).toThrow(
+      /Unsupported port sniff action/,
+    );
     expect(() => portSniff.buildFrames({ action: "txrx", rate: 0, lanPort: "p1" })).toThrow(/rate/);
   });
 

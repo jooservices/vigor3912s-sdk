@@ -38,13 +38,9 @@ function parseServerBlock(
     return null;
   }
 
-  const ipAddress = match[1]?.trim();
-  const portText = match[2]?.trim();
-  const type = match[3]?.trim();
-
-  if (ipAddress === undefined || portText === undefined || type === undefined) {
-    return null;
-  }
+  const ipAddress = (match[1] as string).trim();
+  const portText = (match[2] as string).trim();
+  const type = (match[3] as string).trim();
 
   const portNumber = Number.parseInt(portText, 10);
 

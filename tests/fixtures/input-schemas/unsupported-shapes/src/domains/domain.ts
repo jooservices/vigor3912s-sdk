@@ -33,4 +33,19 @@ const omittableOp: TypedOperation<RequiredFieldInput | undefined, unknown> = {
   parse: () => undefined,
 };
 
-export const operations: readonly TypedOperation<never, unknown>[] = [treeOp, omittableOp];
+interface OptionalInput {
+  readonly note?: string;
+}
+
+const optionalEmptyObjectOp: TypedOperation<OptionalInput | undefined, unknown> = {
+  manifestId: "fixture.omittable-optional-only",
+  classification: "read",
+  buildFrames: (input) => input,
+  parse: () => undefined,
+};
+
+export const operations: readonly TypedOperation<never, unknown>[] = [
+  treeOp,
+  omittableOp,
+  optionalEmptyObjectOp,
+];

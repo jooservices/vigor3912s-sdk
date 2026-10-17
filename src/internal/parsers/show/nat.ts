@@ -37,11 +37,11 @@ export function parseShowNat(text: string): ShowNatResult {
     const [, index, protocol, publicPort, privateIp, privatePort] = match;
 
     entries.push({
-      index: Number(index ?? 0),
-      protocol: Number(protocol ?? 0),
-      publicPort: Number(publicPort ?? 0),
-      privateIp: privateIp ?? "",
-      privatePort: Number(privatePort ?? 0),
+      index: Number(index),
+      protocol: Number(protocol),
+      publicPort: Number(publicPort),
+      privateIp: privateIp as string,
+      privatePort: Number(privatePort),
     });
   }
 

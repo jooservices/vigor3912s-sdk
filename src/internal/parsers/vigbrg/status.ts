@@ -27,12 +27,8 @@ export function parseStatus(text: string): VigbrgStatusReport {
   const wanManagement: VigbrgWanManagementStatus[] = [];
 
   for (const match of text.matchAll(WAN_MANAGEMENT_PATTERN)) {
-    const wanNumber = match[1];
-    const state = match[2];
-
-    if (wanNumber === undefined || state === undefined) {
-      continue;
-    }
+    const wanNumber = match[1] as string;
+    const state = match[2] as string;
 
     wanManagement.push({
       wanLabel: `WAN${wanNumber}`,

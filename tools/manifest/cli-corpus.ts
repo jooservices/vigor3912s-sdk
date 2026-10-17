@@ -81,7 +81,7 @@ export function extractCommandTitle(decodedLine: string): string {
  * for classification lookups is the first variant, normalized to lowercase.
  */
 export function familyKey(title: string): string {
-  const firstVariant = title.split("/")[0] ?? title;
+  const firstVariant = title.replace(/\/.*$/, "");
   return firstVariant.trim().toLowerCase();
 }
 

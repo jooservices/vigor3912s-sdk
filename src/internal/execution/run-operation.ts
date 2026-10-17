@@ -72,14 +72,16 @@ export async function runOperation<TInput, TOutput>(
 
     // Never parse a rejected command as a result. The message carries only
     // the rejection kind, not router output (no-output-leak rule).
-    if (rejection !== undefined) {
-      throw new Vigor3912SError(
-        sdkErrorCodes.commandRejected,
-        `Router rejected "${operation.manifestId}" (${rejection}).`,
-      );
+    switch (rejection) {
+      case undefined:
+        exchanges.push(exchange);
+        break;
+      default:
+        throw new Vigor3912SError(
+          sdkErrorCodes.commandRejected,
+          `Router rejected "${operation.manifestId}" (${rejection}).`,
+        );
     }
-
-    exchanges.push(exchange);
   }
 
   return operation.parse(exchanges);

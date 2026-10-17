@@ -14,6 +14,15 @@ const SAMPLE_WANSTATUS_TEXT = [
   "",
 ].join("\n");
 
+const MALFORMED_TABLE_TEXT = [
+  "WAN mac table:",
+  "Index   MAC Address             Stamp Time      PVC     VLan Port",
+  "one-field",
+  "two-fields    only",
+  "three-fields  only    here",
+  "four-fields   are     still    incomplete",
+].join("\n");
+
 describe("cli.vigbrg.wanstatus -- vigbrg wanstatus (read)", () => {
   it("builds the documented no-argument frame", () => {
     const frames = vigbrgWanStatus.buildFrames(undefined);
@@ -42,6 +51,10 @@ describe("cli.vigbrg.wanstatus -- vigbrg wanstatus (read)", () => {
       bridgeState: null,
       entries: [],
     });
+  });
+
+  it("skips incomplete rows after a recognized table header", () => {
+    expect(parseWanStatus(MALFORMED_TABLE_TEXT)).toEqual({ bridgeState: null, entries: [] });
   });
 
   it("links to the capability manifest as a read operation", () => {

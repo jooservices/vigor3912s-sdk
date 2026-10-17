@@ -9,6 +9,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { runBooleanCliIfMain } from "./cli-entry.ts";
 import { CLI_RAW_PATH, sdkRoot } from "./manifest/paths.ts";
 import { SYNTAX_FORM_EXCLUSIONS } from "./manifest/syntax-form-exclusions.ts";
 import {
@@ -144,8 +145,4 @@ export async function main(
   return untested.length === 0 && syntaxOk;
 }
 
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (!(await main())) {
-    process.exitCode = 1;
-  }
-}
+await runBooleanCliIfMain(process.argv[1], import.meta.url, main);

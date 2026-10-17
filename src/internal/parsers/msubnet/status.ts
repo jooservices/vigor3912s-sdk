@@ -53,29 +53,15 @@ export function parseMsubnetStatus(text: string): MsubnetStatusReport | null {
     dhcpPoolCountText,
   ] = match;
 
-  if (
-    interfaceLabel === undefined ||
-    subnetStateText === undefined ||
-    ipAddress === undefined ||
-    netmask === undefined ||
-    pppStartIp === undefined ||
-    dhcpStateText === undefined ||
-    dhcpGatewayIp === undefined ||
-    dhcpStartIp === undefined ||
-    dhcpPoolCountText === undefined
-  ) {
-    return null;
-  }
-
   return {
-    interfaceLabel,
+    interfaceLabel: interfaceLabel as string,
     subnetEnabled: subnetStateText === "On",
-    ipAddress,
-    netmask,
-    pppStartIp,
+    ipAddress: ipAddress as string,
+    netmask: netmask as string,
+    pppStartIp: pppStartIp as string,
     dhcpServerEnabled: dhcpStateText === "On",
-    dhcpGatewayIp,
-    dhcpStartIp,
+    dhcpGatewayIp: dhcpGatewayIp as string,
+    dhcpStartIp: dhcpStartIp as string,
     dhcpPoolCount: Number(dhcpPoolCountText),
   };
 }

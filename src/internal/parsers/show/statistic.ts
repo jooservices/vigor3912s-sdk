@@ -34,9 +34,9 @@ export function parseShowStatistic(text: string): ShowStatisticResult {
     const [, wan, tx, rx] = match;
 
     entries.push({
-      wan: Number(wan ?? 0),
-      tx: tx ?? "",
-      rx: rx ?? "",
+      wan: Number(wan),
+      tx: tx as string,
+      rx: rx as string,
     });
   }
 

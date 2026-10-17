@@ -24,33 +24,13 @@ export default {
       // reachable from a test's import graph — otherwise an un-imported file
       // would silently vanish from the report instead of showing as 0%.
       all: true,
-      // `tools/` holds the manifest/schema generators — build-pipeline code
-      // that decides what the SDK publishes, so it is measured too.
       include: ["src/**/*.ts", "tools/**/*.ts"],
-      exclude: [
-        "tests/**", // test files themselves, not implementation
-        "dist/**", // build output, not source
-        "**/*.generated.ts", // generated data, no hand-written branches to cover
-        "src/manifest/types.ts", // type-only: schema types, no runtime logic
-        "src/internal/execution/transport.ts", // type-only: `Transport` port interface, no runtime logic
-      ],
       thresholds: {
-        lines: 90,
-        statements: 90,
-        functions: 90,
-        branches: 90,
-        // Owner requirement 2026-09-29: >= 85 % lines including the generators.
-        "tools/**/*.ts": {
-          lines: 85,
-        },
-        // Feature completeness: every operation's buildFrames/parse (and every
-        // parser) must be executed by a test — see tests/features/operation-coverage.test.ts.
-        "src/domains/**/*.ts": {
-          functions: 100,
-        },
-        "src/internal/parsers/**/*.ts": {
-          functions: 100,
-        },
+        lines: 100,
+        statements: 100,
+        functions: 100,
+        branches: 100,
+        perFile: true,
       },
     },
   },

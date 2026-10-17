@@ -184,7 +184,10 @@ export function assertTrailingText(value: string, name: string): void {
   }
 }
 
-export function assertArgsShape(args: readonly string[], label: string): void {
+export function assertArgsShape(
+  args: readonly string[],
+  label: string,
+): asserts args is readonly [string, ...string[]] {
   if (args.length === 0) {
     throw new InvalidInputError(`${label} requires at least one argument token.`);
   }

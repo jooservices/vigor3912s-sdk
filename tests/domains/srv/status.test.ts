@@ -53,6 +53,12 @@ describe("cli.srv.dhcp.status -- srv dhcp status (read)", () => {
     });
   });
 
+  it("keeps a host id unchanged when a captured lease has no trailing router prompt", () => {
+    const withoutPrompt = SAMPLE_STATUS_TEXT.replace("A1000460>", "A1000460");
+
+    expect(parseDhcpStatus(withoutPrompt).leases[0]?.hostId).toBe("A1000460");
+  });
+
   it("returns nulls and no leases for text that doesn't match the documented shape", () => {
     expect(parseDhcpStatus("not a status block")).toEqual({
       interfaceLabel: null,
